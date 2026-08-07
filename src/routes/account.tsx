@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, Gift, Heart, MapPin, Wallet } from "lucide-react";
+import { ChevronRight, Gift, Heart, LogIn, LogOut, MapPin, Wallet } from "lucide-react";
+import { toast } from "sonner";
 import { BottomNav } from "@/components/app/bottom-nav";
 import { useCart } from "@/lib/cart";
+import { useAuth } from "@/lib/auth";
 import { money } from "@/lib/data";
 import { useRestaurants } from "@/lib/firebase-adapters";
 
@@ -26,6 +28,7 @@ export const Route = createFileRoute("/account")({
 function AccountPage() {
   const { restaurants } = useRestaurants();
   const { orders } = useCart();
+  const { user, signOut } = useAuth();
   const spent = orders.reduce((sum, o) => sum + o.total, 0);
 
   return (
@@ -33,13 +36,38 @@ function AccountPage() {
       <header className="border-b border-border px-4 pt-6 pb-6">
         <div className="flex items-center gap-4">
           <span className="grid size-16 place-items-center rounded-3xl bg-secondary text-lg font-black ring-1 ring-border">
-            AM
+            {user ? user.initials : "GU"}
           </span>
           <div>
-            <h1 className="text-xl leading-tight font-black tracking-tight">Amara Mitchell</h1>
-            <p className="label-mono mt-1 text-muted-foreground">amara@hearth.app</p>
+            <h1 className="text-xl leading-tight font-black tracking-tight">
+              {user ? user.name : "Guest"}
+            </h1>
+            <p className="label-mono mt-1 text-muted-foreground">
+              {user ? user.email : "Not signed in"}
+            </p>
           </div>
         </div>
+        {user ? (
+          <button
+            type="button"
+            onClick={() => {
+              signOut();
+              toast("Signed out", { description: "Your cart stays saved to your account." });
+            }}
+            className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-secondary text-sm font-black tracking-[0.1em] uppercase ring-1 ring-border"
+          >
+            <LogOut className="size-4" aria-hidden />
+            Sign out
+          </button>
+        ) : (
+          <Link
+            to="/login"
+            className="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase"
+          >
+            <LogIn className="size-4" aria-hidden />
+            Sign in
+          </Link>
+        )}
         <div className="mt-6 grid grid-cols-3 gap-2">
           <Stat label="Orders" value={String(orders.length)} />
           <Stat label="Spent" value={money(spent)} />
