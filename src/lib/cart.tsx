@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { coupons, getRestaurant, type Dish } from "./data";
+import { useAuth } from "./auth";
+import { get, getDb, ref, set } from "./firebase";
 
 export type CartLine = {
   lineId: string;
@@ -74,12 +76,22 @@ type CartState = {
   orders: Order[];
   placeOrder: (input: { address: string; mode: "delivery" | "pickup" }) => Order;
   getOrder: (id: string) => Order | undefined;
+  /** True while the signed-in customer's saved cart is being loaded from the cloud. */
+  syncing: boolean;
+  /** "cloud" once the cart is saved to the customer's account, else "local". */
+  storage: "cloud" | "local";
 };
 
 const CartContext = createContext<CartState | null>(null);
 
 const CART_KEY = "hearth.cart.v1";
 const ORDERS_KEY = "hearth.orders.v1";
+
+type StoredCart = { lines: CartLine[]; tip: number; couponCode: string | null };
+
+function cartPath(uid: string) {
+  return `customerCarts/${uid}`;
+}
 
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -92,11 +104,15 @@ function read<T>(key: string, fallback: T): T {
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  const { user, hydrated: authHydrated } = useAuth();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [tip, setTip] = useState(0);
   const [couponCode, setCouponCode] = useState<string | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  /** Guards cloud writes until the signed-in cart has been read back. */
+  const [cloudReady, setCloudReady] = useState(false);
 
   useEffect(() => {
     const cart = read<{ lines: CartLine[]; tip: number; couponCode: string | null }>(CART_KEY, {
@@ -111,10 +127,66 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
   }, []);
 
+  /* Load the signed-in customer's cart from Firebase, merging any guest cart. */
+  useEffect(() => {
+    if (!hydrated || !authHydrated) return;
+    if (!user) {
+      setCloudReady(false);
+      setSyncing(false);
+      return;
+    }
+    const db = getDb();
+    if (!db) return;
+    let cancelled = false;
+    setSyncing(true);
+    void get(ref(db, cartPath(user.uid)))
+      .then((snap) => {
+        if (cancelled) return;
+        const saved = (snap.val() ?? null) as StoredCart | null;
+        setLines((current) => {
+          // A cart built while signed out wins, so nothing the customer just
+          // added is lost when they sign in.
+          if (current.length > 0) return current;
+          return saved?.lines ?? [];
+        });
+        if (saved && (saved.lines?.length ?? 0) > 0) {
+          setTip((current) => (current === 0 ? (saved.tip ?? 0) : current));
+          setCouponCode((current) => current ?? saved.couponCode ?? null);
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn("[cart] could not load saved cart", error);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setSyncing(false);
+        setCloudReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, hydrated, authHydrated]);
+
   useEffect(() => {
     if (!hydrated) return;
     window.localStorage.setItem(CART_KEY, JSON.stringify({ lines, tip, couponCode }));
   }, [lines, tip, couponCode, hydrated]);
+
+  /* Mirror every change to the customer's account so it survives sign-out. */
+  useEffect(() => {
+    if (!user || !cloudReady) return;
+    const db = getDb();
+    if (!db) return;
+    const timer = window.setTimeout(() => {
+      void set(ref(db, cartPath(user.uid)), {
+        lines,
+        tip,
+        couponCode,
+        updatedAt: new Date().toISOString(),
+      }).catch((error: unknown) => console.warn("[cart] could not save cart", error));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [user, cloudReady, lines, tip, couponCode]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -244,6 +316,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       orders,
       placeOrder,
       getOrder,
+      syncing,
+      storage: user ? "cloud" : "local",
     }),
     [
       lines,
@@ -264,6 +338,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
       orders,
       placeOrder,
       getOrder,
+      syncing,
+      user,
     ],
   );
 
