@@ -93,6 +93,26 @@ function cartPath(uid: string) {
   return `customerCarts/${uid}`;
 }
 
+/** Firebase drops empty arrays/strings, so rebuild a complete CartLine on read. */
+function normalizeLines(value: unknown): CartLine[] {
+  const raw = Array.isArray(value) ? value : value && typeof value === "object" ? Object.values(value) : [];
+  return raw
+    .filter((l): l is Record<string, unknown> => !!l && typeof l === "object")
+    .map((l) => ({
+      lineId: String(l["lineId"] ?? `line-${Math.random().toString(36).slice(2)}`),
+      dishId: String(l["dishId"] ?? ""),
+      restaurantSlug: String(l["restaurantSlug"] ?? ""),
+      name: String(l["name"] ?? "Item"),
+      image: String(l["image"] ?? ""),
+      unitPrice: Number(l["unitPrice"] ?? 0),
+      sizeLabel: String(l["sizeLabel"] ?? "Regular"),
+      extras: Array.isArray(l["extras"]) ? (l["extras"] as string[]) : [],
+      removed: Array.isArray(l["removed"]) ? (l["removed"] as string[]) : [],
+      notes: String(l["notes"] ?? ""),
+      qty: Number(l["qty"] ?? 1),
+    }));
+}
+
 function read<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
@@ -142,7 +162,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     void get(ref(db, cartPath(user.uid)))
       .then((snap) => {
         if (cancelled) return;
-        const saved = (snap.val() ?? null) as StoredCart | null;
+        const savedRaw = (snap.val() ?? null) as (Omit<StoredCart, "lines"> & { lines?: unknown }) | null;
+        const saved = savedRaw ? { ...savedRaw, lines: normalizeLines(savedRaw.lines) } : null;
         setLines((current) => {
           // A cart built while signed out wins, so nothing the customer just
           // added is lost when they sign in.
