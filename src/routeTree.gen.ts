@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as OrdersIndexRouteImport } from './routes/orders.index'
 import { Route as OrdersOrderIdRouteImport } from './routes/orders.$orderId'
@@ -36,6 +37,11 @@ const CartRoute = CartRouteImport.update({
 const CheckoutRoute = CheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SearchRoute = SearchRouteImport.update({
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/login': typeof LoginRoute
   '/search': typeof SearchRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/restaurant/$slug': typeof RestaurantSlugRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByTo {
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/login': typeof LoginRoute
   '/search': typeof SearchRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/restaurant/$slug': typeof RestaurantSlugRoute
@@ -85,6 +93,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/login': typeof LoginRoute
   '/search': typeof SearchRoute
   '/orders/$orderId': typeof OrdersOrderIdRoute
   '/restaurant/$slug': typeof RestaurantSlugRoute
@@ -97,6 +106,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/cart'
     | '/checkout'
+    | '/login'
     | '/search'
     | '/orders/$orderId'
     | '/restaurant/$slug'
@@ -107,6 +117,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/cart'
     | '/checkout'
+    | '/login'
     | '/search'
     | '/orders/$orderId'
     | '/restaurant/$slug'
@@ -117,6 +128,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/cart'
     | '/checkout'
+    | '/login'
     | '/search'
     | '/orders/$orderId'
     | '/restaurant/$slug'
@@ -128,6 +140,7 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
+  LoginRoute: typeof LoginRoute
   SearchRoute: typeof SearchRoute
   OrdersOrderIdRoute: typeof OrdersOrderIdRoute
   RestaurantSlugRoute: typeof RestaurantSlugRoute
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       path: '/checkout'
       fullPath: '/checkout'
       preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/search': {
@@ -200,6 +220,7 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
+  LoginRoute: LoginRoute,
   SearchRoute: SearchRoute,
   OrdersOrderIdRoute: OrdersOrderIdRoute,
   RestaurantSlugRoute: RestaurantSlugRoute,
@@ -208,13 +229,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

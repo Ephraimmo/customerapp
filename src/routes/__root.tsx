@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CartProvider } from "@/lib/cart";
+import { AuthProvider } from "@/lib/auth";
 import { Toaster } from "@/components/ui/sonner";
 import { TopNav } from "@/components/app/top-nav";
 import { useLiveSync } from "@/lib/firebase-adapters";
@@ -139,15 +140,17 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <CartProvider>
-        <FirebaseSync />
-        <TopNav />
-        <main>
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-        </main>
-        <Toaster position="top-center" />
-      </CartProvider>
+      <AuthProvider>
+        <CartProvider>
+          <FirebaseSync />
+          <TopNav />
+          <main>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+          </main>
+          <Toaster position="top-center" />
+        </CartProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
