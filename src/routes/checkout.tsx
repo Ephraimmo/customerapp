@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ArrowLeft, Apple, Banknote, CreditCard, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "@/lib/cart";
+import { useAuth } from "@/lib/auth";
 import { getRestaurant, money } from "@/lib/data";
 
 export const Route = createFileRoute("/checkout")({
@@ -39,6 +40,7 @@ function CheckoutPage() {
   const navigate = useNavigate();
   const { lines, restaurantSlug, subtotal, deliveryFee, serviceFee, discount, tip, total, placeOrder } =
     useCart();
+  const { user } = useAuth();
   const restaurant = restaurantSlug ? getRestaurant(restaurantSlug) : undefined;
 
   const [mode, setMode] = useState<"delivery" | "pickup">("delivery");
@@ -90,6 +92,25 @@ function CheckoutPage() {
       </header>
 
       <main className="space-y-8 px-4 pt-6 pb-44 md:pb-24">
+        <section className="rounded-2xl bg-secondary p-4 ring-1 ring-border">
+          {user ? (
+            <>
+              <span className="label-mono text-muted-foreground">Ordering as</span>
+              <p className="mt-1 text-sm font-bold">{user.name}</p>
+              <p className="label-mono mt-1 text-muted-foreground">
+                {user.email} • {user.phone}
+              </p>
+            </>
+          ) : (
+            <>
+              <span className="label-mono text-muted-foreground">Guest checkout</span>
+              <Link to="/login" className="mt-1 block text-sm font-bold text-primary">
+                Sign in to save your cart and details →
+              </Link>
+            </>
+          )}
+        </section>
+
         <section>
           <h2 className="label-mono mb-3 text-muted-foreground">How would you like it?</h2>
           <div className="grid grid-cols-2 gap-2">
