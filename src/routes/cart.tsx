@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "@/lib/cart";
+import { useAuth } from "@/lib/auth";
 import { getRestaurant, money } from "@/lib/data";
 
 export const Route = createFileRoute("/cart")({
@@ -41,7 +42,10 @@ function CartPage() {
     couponCode,
     applyCoupon,
     removeCoupon,
+    syncing,
+    storage,
   } = useCart();
+  const { user } = useAuth();
   const [code, setCode] = useState("");
   const restaurant = restaurantSlug ? getRestaurant(restaurantSlug) : undefined;
 
@@ -58,10 +62,25 @@ function CartPage() {
         <div>
           <h1 className="text-lg leading-none font-black tracking-tight">Your cart</h1>
           <p className="label-mono mt-1 text-muted-foreground">
-            {restaurant ? restaurant.name : "Empty"}
+            {syncing ? "Loading saved cart…" : restaurant ? restaurant.name : "Empty"}
           </p>
         </div>
       </header>
+
+      <div className="px-4 pt-4">
+        {storage === "cloud" && user ? (
+          <p className="rounded-2xl bg-primary/10 px-4 py-3 text-xs font-bold text-primary ring-1 ring-primary/20">
+            Saved to {user.name}'s account — sign out and back in and it'll still be here.
+          </p>
+        ) : (
+          <Link
+            to="/login"
+            className="block rounded-2xl bg-secondary px-4 py-3 text-xs font-bold ring-1 ring-border"
+          >
+            Sign in to save this cart to your account →
+          </Link>
+        )}
+      </div>
 
       {lines.length === 0 ? (
         <main className="px-4 py-16 text-center">

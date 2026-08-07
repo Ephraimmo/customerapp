@@ -1,9 +1,11 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import {
   getDatabase,
+  get,
   onValue,
   ref,
   set,
+  remove,
   type Database,
   type DatabaseReference,
 } from "firebase/database";
@@ -43,5 +45,5 @@ export function getDb(): Database | null {
   return cachedDb;
 }
 
-export { onValue, ref, set };
+export { get, onValue, ref, set, remove };
 export type { DatabaseReference };
