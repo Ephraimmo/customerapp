@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { BottomNav } from "@/components/app/bottom-nav";
 import { CartBar } from "@/components/app/cart-bar";
-import { currentStage, stageCopy, useCart } from "@/lib/cart";
+import { useCart } from "@/lib/cart";
 import { money } from "@/lib/data";
 
 export const Route = createFileRoute("/orders/")({
@@ -24,7 +24,6 @@ export const Route = createFileRoute("/orders/")({
 
 function OrdersPage() {
   const { orders } = useCart();
-  const now = Date.now();
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-md bg-background md:max-w-2xl">
@@ -37,7 +36,7 @@ function OrdersPage() {
           <div className="rounded-3xl bg-secondary p-8 text-center ring-1 ring-border">
             <p className="text-lg font-black">No orders yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Your first delivery will show up here with live tracking.
+              Orders you place will appear here with live tracking directly from the kitchen.
             </p>
             <Link
               to="/"
@@ -48,34 +47,56 @@ function OrdersPage() {
           </div>
         ) : (
           orders.map((order) => {
-            const stage = currentStage(order, now);
-            const live = stage !== "delivered";
+            if (!order || !order.id) return null;
+            const status = (order.status || "pending").toLowerCase();
+            const isLive =
+              status !== "delivered" && status !== "cancelled" && status !== "refunded";
+
             return (
               <Link
                 key={order.id}
                 to="/orders/$orderId"
                 params={{ orderId: order.id }}
-                className="block rounded-3xl bg-card p-5 ring-1 ring-border"
+                className="block rounded-3xl bg-card p-5 ring-1 ring-border hover:bg-card/90 transition-colors"
               >
                 <div className="flex items-start justify-between">
                   <div>
-                    <span className="label-mono text-muted-foreground">{order.id}</span>
-                    <p className="mt-1 text-base leading-tight font-bold">{order.restaurantName}</p>
+                    <span className="label-mono text-muted-foreground font-mono">
+                      {order.order_number || order.id}
+                    </span>
+                    <p className="mt-1 text-base leading-tight font-bold">
+                      {order.restaurant_name || "Restaurant"}
+                    </p>
                   </div>
                   <span
                     className={`rounded-full px-3 py-1.5 text-[10px] font-black tracking-widest uppercase ${
-                      live ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"
+                      status === "delivered"
+                        ? "bg-emerald-500/15 text-emerald-600"
+                        : status === "cancelled"
+                          ? "bg-destructive/15 text-destructive"
+                          : status === "refunded"
+                            ? "bg-amber-500/15 text-amber-600"
+                            : "bg-primary/10 text-primary"
                     }`}
                   >
-                    {live ? "Live" : "Delivered"}
+                    {isLive ? `Live • ${status.replace(/_/g, " ")}` : status.replace(/_/g, " ")}
                   </span>
                 </div>
-                <p className="mt-3 text-sm text-muted-foreground">{stageCopy[stage].title}</p>
-                <div className="mt-3 flex items-center justify-between">
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {order.placed_at
+                    ? new Date(order.placed_at).toLocaleString([], {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "Recent"}
+                </p>
+                <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-2">
                   <span className="label-mono text-muted-foreground">
-                    {order.lines.reduce((s, l) => s + l.qty, 0)} items
+                    {order.payment_method
+                      ? `Payment: ${order.payment_method.toUpperCase()}`
+                      : "Card"}
                   </span>
-                  <span className="font-mono text-sm font-black">{money(order.total)}</span>
+                  <span className="font-mono text-sm font-black">{money(order.total || 0)}</span>
                 </div>
               </Link>
             );

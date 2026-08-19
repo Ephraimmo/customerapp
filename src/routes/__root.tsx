@@ -13,6 +13,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { CartProvider } from "@/lib/cart";
 import { AuthProvider } from "@/lib/auth";
+import { LocationProvider } from "@/lib/location";
 import { Toaster } from "@/components/ui/sonner";
 import { TopNav } from "@/components/app/top-nav";
 import { useLiveSync } from "@/lib/firebase-adapters";
@@ -61,7 +62,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
               router.invalidate();
               reset();
             }}
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 cursor-pointer"
           >
             Try again
           </button>
@@ -141,15 +142,17 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <CartProvider>
-          <FirebaseSync />
-          <TopNav />
-          <main>
-            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <Outlet />
-          </main>
-          <Toaster position="top-center" />
-        </CartProvider>
+        <LocationProvider>
+          <CartProvider>
+            <FirebaseSync />
+            <TopNav />
+            <main>
+              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+              <Outlet />
+            </main>
+            <Toaster position="top-center" />
+          </CartProvider>
+        </LocationProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

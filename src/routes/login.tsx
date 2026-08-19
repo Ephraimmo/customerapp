@@ -1,21 +1,21 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, LogIn } from "lucide-react";
+import { ArrowLeft, Gift, LogIn, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { demoAccounts, useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Hearth" },
+      { title: "Sign in or Register — Hearth" },
       {
         name: "description",
-        content: "Sign in to Hearth to keep your cart, addresses and orders saved to your account.",
+        content: "Sign in or create an account on Hearth to keep your cart, addresses, loyalty points and orders saved.",
       },
-      { property: "og:title", content: "Sign in — Hearth" },
+      { property: "og:title", content: "Sign in or Register — Hearth" },
       {
         property: "og:description",
-        content: "Your cart follows your account, so it's waiting when you come back.",
+        content: "Your cart and loyalty rewards follow your account, so it's waiting whenever you come back.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -26,12 +26,22 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { signIn, user, signOut } = useAuth();
+  const { signIn, signUp, user, signOut } = useAuth();
+  const [tab, setTab] = useState<"signin" | "register">("signin");
+
+  // Sign In State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  function submit(e: React.FormEvent) {
+  // Register State
+  const [registerName, setRegisterName] = useState("");
+  const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
+  const [registerPassword, setRegisterPassword] = useState("");
+  const [registerError, setRegisterError] = useState<string | null>(null);
+
+  function submitLogin(e: React.FormEvent) {
     e.preventDefault();
     const result = signIn(email, password);
     if (!result.ok) {
@@ -39,7 +49,24 @@ function LoginPage() {
       return;
     }
     setError(null);
-    toast.success("Signed in", { description: "Your saved cart is loading." });
+    toast.success("Welcome back!", { description: "Signed in successfully." });
+    void navigate({ to: "/cart" });
+  }
+
+  function submitRegister(e: React.FormEvent) {
+    e.preventDefault();
+    const result = signUp({
+      name: registerName,
+      email: registerEmail,
+      phone: registerPhone,
+      password: registerPassword,
+    });
+    if (!result.ok) {
+      setRegisterError(result.error ?? "Registration failed.");
+      return;
+    }
+    setRegisterError(null);
+    toast.success("Account created!", { description: "You are now signed in." });
     void navigate({ to: "/cart" });
   }
 
@@ -54,94 +81,212 @@ function LoginPage() {
           <ArrowLeft className="size-4" aria-hidden />
         </Link>
         <div>
-          <h1 className="text-lg leading-none font-black tracking-tight">Sign in</h1>
-          <p className="label-mono mt-1 text-muted-foreground">Keep your cart saved</p>
+          <h1 className="text-lg leading-none font-black tracking-tight">
+            {tab === "signin" ? "Sign in" : "Create Account"}
+          </h1>
+          <p className="label-mono mt-1 text-muted-foreground">Keep your cart & loyalty points saved</p>
         </div>
       </header>
 
-      <main className="space-y-8 px-4 pt-8 pb-24">
+      <main className="space-y-6 px-4 pt-6 pb-24">
         {user ? (
-          <section className="rounded-3xl bg-secondary p-5 ring-1 ring-border">
+          <section className="rounded-3xl bg-secondary p-5 ring-1 ring-border space-y-3">
             <span className="label-mono text-muted-foreground">Signed in as</span>
-            <p className="mt-1 text-sm font-bold">{user.name}</p>
-            <p className="label-mono mt-1 text-muted-foreground">{user.email}</p>
-            <button
-              type="button"
-              onClick={() => {
-                signOut();
-                toast("Signed out", { description: "Your cart stays saved to your account." });
-              }}
-              className="mt-4 h-12 w-full rounded-2xl bg-foreground text-sm font-black tracking-[0.1em] text-background uppercase"
-            >
-              Sign out
-            </button>
+            <p className="text-base font-bold text-foreground">{user.name}</p>
+            <p className="label-mono text-xs text-muted-foreground">{user.email} • {user.phone}</p>
+            <div className="pt-2 flex gap-2">
+              <Link
+                to="/cart"
+                className="flex-1 h-12 rounded-2xl bg-primary text-primary-foreground text-xs font-black tracking-wider uppercase flex items-center justify-center shadow-md hover:bg-primary/90 transition-all cursor-pointer"
+              >
+                Go to Cart
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  signOut();
+                  toast("Signed out", { description: "You are now browsing as guest." });
+                }}
+                className="h-12 px-5 rounded-2xl bg-secondary text-xs font-bold text-foreground ring-1 ring-border hover:bg-secondary/80 transition-colors cursor-pointer"
+              >
+                Sign out
+              </button>
+            </div>
           </section>
         ) : (
-          <form onSubmit={submit} className="space-y-4">
-            <div>
-              <label htmlFor="email" className="label-mono mb-2 block text-muted-foreground">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="h-14 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
-              />
+          <div className="space-y-4">
+            {/* Mode Switcher Tabs */}
+            <div className="flex rounded-2xl bg-secondary p-1 border border-border">
+              <button
+                type="button"
+                onClick={() => setTab("signin")}
+                className={`flex-1 h-10 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  tab === "signin"
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("register")}
+                className={`flex-1 h-10 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  tab === "register"
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Register
+              </button>
             </div>
-            <div>
-              <label htmlFor="password" className="label-mono mb-2 block text-muted-foreground">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="h-14 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </div>
-            {error ? <p className="text-sm font-bold text-destructive">{error}</p> : null}
-            <button
-              type="submit"
-              className="flex h-16 w-full items-center justify-center gap-2 rounded-3xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-2xl shadow-primary/30 active:scale-[0.98]"
-            >
-              <LogIn className="size-4" aria-hidden />
-              Sign in
-            </button>
-          </form>
-        )}
 
-        <section className="rounded-3xl bg-card p-5 ring-1 ring-border">
-          <h2 className="label-mono mb-3 text-muted-foreground">Demo logins</h2>
-          <ul className="space-y-2">
-            {demoAccounts.map((a) => (
-              <li key={a.uid}>
+            {/* Benefit Pill */}
+            <div className="rounded-2xl bg-primary/10 p-3.5 border border-primary/20 flex items-center gap-2.5 text-xs text-primary font-bold">
+              <Gift className="size-4 shrink-0" />
+              <span>Earn points on deliveries & save addresses in the cloud</span>
+            </div>
+
+            {tab === "signin" ? (
+              <form onSubmit={submitLogin} className="space-y-4 pt-1">
+                <div>
+                  <label htmlFor="email" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="e.g. demo@hearth.app"
+                    className="h-12 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="password" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                    Password
+                  </label>
+                  <input
+                    id="password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="••••••••"
+                    className="h-12 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                {error ? <p className="text-xs font-bold text-destructive">{error}</p> : null}
                 <button
-                  type="button"
-                  onClick={() => {
-                    setEmail(a.email);
-                    setPassword(a.password);
-                  }}
-                  className="w-full rounded-2xl bg-secondary px-4 py-3 text-left ring-1 ring-border"
+                  type="submit"
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-xl shadow-primary/25 active:scale-[0.98] cursor-pointer hover:bg-primary/90 transition-all"
                 >
-                  <span className="block text-sm font-bold">{a.name}</span>
-                  <span className="label-mono mt-1 block text-muted-foreground">
-                    {a.email} • {a.password}
-                  </span>
+                  <LogIn className="size-4" aria-hidden />
+                  Sign in
                 </button>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Tap an account to fill the form. Each demo account keeps its own cart in the cloud.
-          </p>
-        </section>
+              </form>
+            ) : (
+              <form onSubmit={submitRegister} className="space-y-4 pt-1">
+                <div>
+                  <label htmlFor="reg-name" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                    Full Name *
+                  </label>
+                  <input
+                    id="reg-name"
+                    type="text"
+                    required
+                    value={registerName}
+                    onChange={(e) => setRegisterName(e.target.value)}
+                    placeholder="e.g. Alex Mercer"
+                    className="h-12 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label htmlFor="reg-email" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                      Email *
+                    </label>
+                    <input
+                      id="reg-email"
+                      type="email"
+                      required
+                      value={registerEmail}
+                      onChange={(e) => setRegisterEmail(e.target.value)}
+                      placeholder="alex@example.com"
+                      className="h-12 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="reg-phone" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                      Phone (optional)
+                    </label>
+                    <input
+                      id="reg-phone"
+                      type="tel"
+                      value={registerPhone}
+                      onChange={(e) => setRegisterPhone(e.target.value)}
+                      placeholder="+27 82 555 0100"
+                      className="h-12 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="reg-pw" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                    Password *
+                  </label>
+                  <input
+                    id="reg-pw"
+                    type="password"
+                    required
+                    value={registerPassword}
+                    onChange={(e) => setRegisterPassword(e.target.value)}
+                    placeholder="Create a secure password"
+                    className="h-12 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+                {registerError ? <p className="text-xs font-bold text-destructive">{registerError}</p> : null}
+                <button
+                  type="submit"
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-xl shadow-primary/25 active:scale-[0.98] cursor-pointer hover:bg-primary/90 transition-all"
+                >
+                  <UserPlus className="size-4" aria-hidden />
+                  Create Account
+                </button>
+              </form>
+            )}
+
+            {/* 1-Tap Demo Login Box */}
+            <section className="rounded-3xl bg-card p-5 ring-1 ring-border space-y-3">
+              <h2 className="label-mono text-xs text-muted-foreground font-bold uppercase">1-Tap Demo Logins</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {demoAccounts.map((a) => (
+                  <button
+                    key={a.uid}
+                    type="button"
+                    onClick={() => {
+                      setEmail(a.email);
+                      setPassword(a.password);
+                      const res = signIn(a.email, a.password);
+                      if (res.ok) {
+                        toast.success(`Signed in as ${a.name}`);
+                        void navigate({ to: "/cart" });
+                      }
+                    }}
+                    className="rounded-2xl bg-secondary p-3 text-left ring-1 ring-border hover:bg-secondary/80 transition-colors cursor-pointer"
+                  >
+                    <span className="block text-xs font-bold text-foreground">{a.name}</span>
+                    <span className="label-mono text-[10px] mt-0.5 block text-muted-foreground truncate">
+                      {a.email}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );

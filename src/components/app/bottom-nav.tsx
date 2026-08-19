@@ -9,7 +9,7 @@ const items = [
 ] as const;
 
 export function BottomNav() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const pathname = useRouterState({ select: (s) => s?.location?.pathname || "/" });
 
   return (
     <nav

@@ -53,7 +53,8 @@ function inferFields(samples: FirebaseRecord[], depth: number): FieldSchema[] {
       types,
       optional: present.length < samples.length || types.includes("null"),
       isTimestamp:
-        TIMESTAMP_HINT.test(name) && values.some((v) => typeof v === "number" || typeof v === "string"),
+        TIMESTAMP_HINT.test(name) &&
+        values.some((v) => typeof v === "number" || typeof v === "string"),
       isReference: REFERENCE_HINT.test(name) && values.some((v) => typeof v === "string"),
       children: depth > 0 && nested.length ? inferFields(nested, depth - 1) : undefined,
     };
@@ -77,7 +78,12 @@ export function discoverSchemas(root: FirebaseValue, sampleSize = 12): NodeSchem
         fields: inferFields(samples, 2),
       };
     }
-    return { path, shape: "object", count: Object.keys(node).length, fields: inferFields([node], 2) };
+    return {
+      path,
+      shape: "object",
+      count: Object.keys(node).length,
+      fields: inferFields([node], 2),
+    };
   });
 }
 
