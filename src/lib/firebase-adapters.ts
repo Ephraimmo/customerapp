@@ -371,7 +371,7 @@ export function mapRestaurant(
   const lngRaw = pick(raw, ["longitude", "lng", "lon"]);
   const latitude = latRaw != null && latRaw !== "" ? Number(latRaw) : -26.1662;
   const longitude = lngRaw != null && lngRaw !== "" ? Number(lngRaw) : 28.0273;
-  const status = (str(raw, ["status"], "approved") as Restaurant["status"]) || "approved";
+  const status = (str(raw, ["status"], "pending") as Restaurant["status"]) || "pending";
 
   return {
     id,
@@ -472,7 +472,7 @@ export function useRestaurants() {
         const menuNode = isRecord(menus) ? ((menus[rid] ?? menus[raw.id]) as FirebaseValue) : null;
         return mapRestaurant(raw, standalone, menuNode ?? null);
       })
-      .filter((r) => r.status !== "rejected" && r.status !== "suspended");
+      .filter((r) => r.status === "approved");
 
     // Seamlessly merge Firebase restaurants with curated catalog, preventing duplicates
     const seen = new Set<string>();

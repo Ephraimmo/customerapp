@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, Gift, LogIn, UserPlus } from "lucide-react";
 import { toast } from "sonner";
-import { demoAccounts, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -258,33 +258,6 @@ function LoginPage() {
               </form>
             )}
 
-            {/* 1-Tap Demo Login Box */}
-            <section className="rounded-3xl bg-card p-5 ring-1 ring-border space-y-3">
-              <h2 className="label-mono text-xs text-muted-foreground font-bold uppercase">1-Tap Demo Logins</h2>
-              <div className="grid grid-cols-2 gap-2">
-                {demoAccounts.map((a) => (
-                  <button
-                    key={a.uid}
-                    type="button"
-                    onClick={() => {
-                      setEmail(a.email);
-                      setPassword(a.password);
-                      const res = signIn(a.email, a.password);
-                      if (res.ok) {
-                        toast.success(`Signed in as ${a.name}`);
-                        void navigate({ to: "/cart" });
-                      }
-                    }}
-                    className="rounded-2xl bg-secondary p-3 text-left ring-1 ring-border hover:bg-secondary/80 transition-colors cursor-pointer"
-                  >
-                    <span className="block text-xs font-bold text-foreground">{a.name}</span>
-                    <span className="label-mono text-[10px] mt-0.5 block text-muted-foreground truncate">
-                      {a.email}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
           </div>
         )}
       </main>
