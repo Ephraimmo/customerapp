@@ -198,7 +198,7 @@ function Discover() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-md bg-background md:max-w-3xl lg:max-w-6xl">
+    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
       {/* Top Header & Search Area */}
       <header className="sticky top-0 z-40 md:static border-b border-border bg-background/95 px-4 pt-4 pb-3 backdrop-blur-md">
         <div className="mb-3 flex items-center justify-between md:hidden">

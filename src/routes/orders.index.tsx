@@ -26,7 +26,7 @@ function OrdersPage() {
   const { orders } = useCart();
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-md bg-background md:max-w-2xl">
+    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-2xl">
       <header className="sticky top-0 z-40 md:static border-b border-border bg-background/90 px-4 py-5 backdrop-blur-md">
         <h1 className="text-2xl leading-none font-black tracking-tight">Orders</h1>
       </header>

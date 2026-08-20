@@ -231,7 +231,7 @@ function AccountPage() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-md bg-background md:max-w-2xl">
+    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-2xl">
       <header className="border-b border-border px-4 pt-6 pb-6">
         <div className="flex items-center gap-4">
           <span className="grid size-16 place-items-center rounded-3xl bg-secondary text-lg font-black ring-1 ring-border">

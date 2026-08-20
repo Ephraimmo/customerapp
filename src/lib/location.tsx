@@ -186,6 +186,56 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     }
   }, [locations, activeLocationId, hydrated]);
 
+  // Keep the app pinned to the device's live GPS while there is no saved address selected.
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined" || !("geolocation" in navigator)) return;
+    if (locations.length > 0 || activeLocationId) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const coords: GpsCoordinates = {
+          latitude: Math.round(pos.coords.latitude * 100000) / 100000,
+          longitude: Math.round(pos.coords.longitude * 100000) / 100000,
+          accuracy: Math.round(pos.coords.accuracy),
+          timestamp: pos.timestamp,
+        };
+
+        setGpsCoordinates(coords);
+        setGpsStatus("success");
+        setGpsError(null);
+
+        const currentGpsLoc: SavedLocation = {
+          id: "gps_current",
+          label: "Current GPS Position",
+          street: `GPS Fix (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`,
+          city: "Johannesburg",
+          postal_code: "2000",
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          notes: `Accurate within ~${coords.accuracy ?? 10}m`,
+          source: "gps",
+        };
+
+        setLocations((prev) => {
+          const withoutPrevGps = prev.filter((p) => p.source !== "gps");
+          return [currentGpsLoc, ...withoutPrevGps];
+        });
+        setActiveLocationId(currentGpsLoc.id);
+        setSelectionMode("current_gps");
+      },
+      (err) => {
+        console.warn("Live GPS watch unavailable:", err.message);
+        setGpsStatus("error");
+        setGpsError(err.message || "Using fallback coordinates");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
+    );
+
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+    };
+  }, [hydrated, locations.length, activeLocationId]);
+
   // Synchronize with Firebase Realtime Database for signed-in user
   useEffect(() => {
     if (!user || !hydrated) return;

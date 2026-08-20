@@ -263,7 +263,7 @@ function TrackOrder() {
   );
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-md bg-background md:max-w-2xl">
+    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-2xl">
       <header className="sticky top-0 z-40 md:static flex items-center justify-between border-b border-border bg-background/90 px-4 py-4 backdrop-blur-md">
         <div className="flex items-center gap-3">
           <Link

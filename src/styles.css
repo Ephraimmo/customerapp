@@ -174,9 +174,29 @@
     color: var(--color-foreground);
     font-family: var(--font-display);
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-height: 100dvh;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    display: block;
+    max-width: 100%;
   }
 
   ::selection {
     background-color: color-mix(in oklab, var(--color-primary) 20%, transparent);
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --radius: 0.875rem;
+  }
+
+  body {
+    font-size: 15px;
   }
 }

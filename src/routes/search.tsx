@@ -216,7 +216,7 @@ function SearchPage() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-md bg-background md:max-w-3xl lg:max-w-6xl">
+    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
       <header className="sticky top-0 z-40 md:static border-b border-border bg-background/95 px-4 pt-4 pb-3 backdrop-blur-md">
         <h1 className="mb-3 text-2xl leading-none font-black tracking-tight text-foreground">
           Search

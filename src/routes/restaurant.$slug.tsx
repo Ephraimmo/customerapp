@@ -193,7 +193,7 @@ function RestaurantPage() {
   ).filter((d) => isItemAvailable(d.id, d.is_available !== false));
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-md bg-background md:max-w-3xl lg:max-w-6xl">
+    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
       {/* Cover Image Header */}
       <div className="relative">
         <img
