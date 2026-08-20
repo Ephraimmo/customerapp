@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check, Gift, LogIn, Sparkles, User, UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
-import { useAuth } from "@/lib/auth";
+import { demoAccounts, useAuth } from "@/lib/auth";
 
 export function AuthDialog({
   open,
@@ -62,6 +62,15 @@ export function AuthDialog({
     toast.success("Account created!", { description: "You are now signed in." });
     onClose();
     if (onSuccess) onSuccess();
+  }
+
+  function handleDemoSelect(email: string, password: string) {
+    const res = signIn(email, password);
+    if (res.ok) {
+      toast.success("Signed in with demo account!");
+      onClose();
+      if (onSuccess) onSuccess();
+    }
   }
 
   return (
@@ -164,6 +173,25 @@ export function AuthDialog({
               <span>Sign In & Continue</span>
             </button>
 
+            {/* Quick Demo Login Selector */}
+            <div className="pt-3 border-t border-border/80 space-y-2">
+              <span className="label-mono block text-[10px] text-muted-foreground font-bold uppercase">
+                Or 1-Tap Demo Login:
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {demoAccounts.map((acc) => (
+                  <button
+                    key={acc.uid}
+                    type="button"
+                    onClick={() => handleDemoSelect(acc.email, acc.password)}
+                    className="p-2.5 rounded-xl bg-secondary/80 hover:bg-secondary border border-border text-left cursor-pointer transition-all"
+                  >
+                    <p className="text-xs font-bold text-foreground">{acc.name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">{acc.email}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
           </form>
         ) : (
           /* Register Form */
