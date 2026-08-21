@@ -86,6 +86,7 @@ function AccountPage() {
   const {
     locations,
     activeLocation,
+    detectGpsLocation,
     selectLocation,
     setDefaultLocation,
     saveLocationToFirebase,
@@ -149,36 +150,19 @@ function AccountPage() {
     Math.max(0, Math.round((activeBalance / pointsRequired) * 100)),
   );
 
-  function handleLiveGps() {
+  async function handleLiveGps() {
     setDetectingGps(true);
-    if (typeof window === "undefined" || !("geolocation" in navigator)) {
-      setLatitude("-26.2041");
-      setLongitude("28.0473");
-      setDetectingGps(false);
-      toast.info("GPS coordinates filled (-26.2041, 28.0473)");
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = Math.round(pos.coords.latitude * 100000) / 100000;
-        const lng = Math.round(pos.coords.longitude * 100000) / 100000;
+    try {
+      const coords = await detectGpsLocation();
+      if (coords) {
+        const lat = coords.latitude;
+        const lng = coords.longitude;
         setLatitude(lat.toString());
         setLongitude(lng.toString());
-        setDetectingGps(false);
-        toast.success("Live GPS coordinates detected!", {
-          description: `Lat: ${lat}° • Lng: ${lng}° (Accuracy: ±${Math.round(pos.coords.accuracy)}m)`,
-        });
-      },
-      (err) => {
-        console.warn("GPS error:", err.message);
-        setLatitude("-26.2041");
-        setLongitude("28.0473");
-        setDetectingGps(false);
-        toast.info("Default coordinates applied (-26.2041, 28.0473)");
-      },
-      { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 },
-    );
+      }
+    } finally {
+      setDetectingGps(false);
+    }
   }
 
   function applyPreset(preset: CityPreset) {

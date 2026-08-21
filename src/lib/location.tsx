@@ -101,6 +101,9 @@ export const INITIAL_SAVED_LOCATIONS: SavedLocation[] = [];
 
 const LOCATIONS_STORAGE_KEY = "hearth.saved_locations.v3";
 const ACTIVE_LOCATION_ID_KEY = "hearth.active_location_id.v3";
+const GOOGLE_MAPS_API_KEY =
+  (import.meta.env["VITE_GOOGLE_MAPS_API_KEY"] as string | undefined) ||
+  "AIzaSyBGk21FLLXX7IZcV9HtT821KM3Be0MHYMg";
 
 const FALLBACK_DEFAULT_LOCATION: SavedLocation = {
   id: "loc_default",
@@ -138,6 +141,58 @@ const LocationContext = createContext<LocationContextType | null>(null);
 
 function locationsFirebasePath(uid: string) {
   return `customerAddresses/${uid}`;
+}
+
+async function reverseGeocodeCoordinates(coords: GpsCoordinates) {
+  if (!GOOGLE_MAPS_API_KEY) return null;
+
+  const params = new URLSearchParams({
+    latlng: `${coords.latitude},${coords.longitude}`,
+    key: GOOGLE_MAPS_API_KEY,
+  });
+  const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
+  if (!response.ok) throw new Error(`Google Geocoding request failed (${response.status})`);
+
+  const data = (await response.json()) as {
+    status: string;
+    results?: Array<{
+      formatted_address?: string;
+      address_components?: Array<{ long_name: string; types: string[] }>;
+    }>;
+  };
+  if (data.status !== "OK" || !data.results?.[0]) return null;
+
+  const result = data.results[0];
+  const component = (type: string) =>
+    result.address_components?.find((item) => item.types.includes(type))?.long_name || "";
+  const street = [component("street_number"), component("route")].filter(Boolean).join(" ");
+
+  return {
+    street: street || result.formatted_address || `${coords.latitude}, ${coords.longitude}`,
+    city:
+      component("locality") ||
+      component("postal_town") ||
+      component("administrative_area_level_2"),
+    postal_code: component("postal_code"),
+  };
+}
+
+function locationFromCoordinates(
+  coords: GpsCoordinates,
+  address?: Awaited<ReturnType<typeof reverseGeocodeCoordinates>>,
+  id = `gps_${Date.now()}`,
+): SavedLocation {
+  return {
+    id,
+    label: "Current GPS Position",
+    street: address?.street || `GPS Fix (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`,
+    city: address?.city || "",
+    postal_code: address?.postal_code || "",
+    latitude: coords.latitude,
+    longitude: coords.longitude,
+    notes: `Accurate within ~${coords.accuracy ?? 10}m`,
+    source: "gps",
+  };
 }
 
 export function LocationProvider({ children }: { children: ReactNode }) {
@@ -204,24 +259,23 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         setGpsStatus("success");
         setGpsError(null);
 
-        const currentGpsLoc: SavedLocation = {
-          id: "gps_current",
-          label: "Current GPS Position",
-          street: `GPS Fix (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`,
-          city: "Johannesburg",
-          postal_code: "2000",
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          notes: `Accurate within ~${coords.accuracy ?? 10}m`,
-          source: "gps",
-        };
-
         setLocations((prev) => {
           const withoutPrevGps = prev.filter((p) => p.source !== "gps");
-          return [currentGpsLoc, ...withoutPrevGps];
+          return [locationFromCoordinates(coords, null, "gps_current"), ...withoutPrevGps];
         });
-        setActiveLocationId(currentGpsLoc.id);
+        setActiveLocationId("gps_current");
         setSelectionMode("current_gps");
+
+        void reverseGeocodeCoordinates(coords)
+          .then((address) => {
+            if (!address) return;
+            setLocations((prev) =>
+              prev.map((location) =>
+                location.id === "gps_current" ? locationFromCoordinates(coords, address, location.id) : location,
+              ),
+            );
+          })
+          .catch((error) => console.warn("Google reverse geocoding unavailable:", error));
       },
       (err) => {
         console.warn("Live GPS watch unavailable:", err.message);
@@ -278,15 +332,11 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       setGpsError(null);
 
       if (typeof window === "undefined" || !("geolocation" in navigator)) {
-        const fallback: GpsCoordinates = {
-          latitude: -26.2041,
-          longitude: 28.0473,
-          accuracy: 15,
-          timestamp: Date.now(),
-        };
-        setGpsCoordinates(fallback);
-        setGpsStatus("success");
-        return fallback;
+        const message = "Location services are unavailable in this browser.";
+        setGpsStatus("error");
+        setGpsError(message);
+        toast.error(message);
+        return null;
       }
 
       return new Promise((resolve) => {
@@ -301,17 +351,12 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             setGpsCoordinates(coords);
             setGpsStatus("success");
 
-            const currentGpsLoc: SavedLocation = {
-              id: `gps_${Date.now()}`,
-              label: options?.label || "Current GPS Position",
-              street: `GPS Fix (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`,
-              city: "Johannesburg",
-              postal_code: "2000",
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-              notes: `Accurate within ~${coords.accuracy ?? 10}m`,
-              source: "gps",
-            };
+            const address = await reverseGeocodeCoordinates(coords).catch((error) => {
+              console.warn("Google reverse geocoding unavailable:", error);
+              return null;
+            });
+            const currentGpsLoc = locationFromCoordinates(coords, address ?? undefined);
+            currentGpsLoc.label = options?.label || currentGpsLoc.label;
 
             if (options?.saveToFirebase) {
               await saveLocationToFirebase(currentGpsLoc);
@@ -330,36 +375,13 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             resolve(coords);
           },
           (err) => {
-            console.warn("Geolocation fallback activated:", err.message);
-            const fallback: GpsCoordinates = {
-              latitude: -26.2041,
-              longitude: 28.0473,
-              accuracy: 25,
-              timestamp: Date.now(),
-            };
-            setGpsCoordinates(fallback);
-            setGpsStatus("success");
-            setGpsError(err.message || "Using simulated coordinates");
-
-            const currentGpsLoc: SavedLocation = {
-              id: `gps_fix`,
-              label: "Current GPS Position",
-              street: "Sandton Central",
-              city: "Johannesburg",
-              postal_code: "2000",
-              latitude: fallback.latitude,
-              longitude: fallback.longitude,
-              notes: "GPS coordinates active",
-              source: "gps",
-            };
-            setLocations((prev) => [
-              currentGpsLoc,
-              ...prev.filter((p) => p.id !== currentGpsLoc.id),
-            ]);
-            setActiveLocationId(currentGpsLoc.id);
-            setSelectionMode("current_gps");
-
-            resolve(fallback);
+            console.warn("Could not detect live GPS location:", err.message);
+            setGpsStatus("error");
+            setGpsError(err.message || "Could not detect your current location.");
+            toast.error("Could not detect your current location", {
+              description: "Check browser location permissions and try again.",
+            });
+            resolve(null);
           },
           { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
         );
