@@ -27,6 +27,7 @@ export interface GpsCoordinates {
 }
 
 export type LocationSelectionMode = "saved" | "current_gps" | "manual";
+export type LocationPermissionState = "unknown" | "granted" | "prompt" | "denied" | "unsupported";
 
 export interface CityPreset {
   name: string;
@@ -101,9 +102,7 @@ export const INITIAL_SAVED_LOCATIONS: SavedLocation[] = [];
 
 const LOCATIONS_STORAGE_KEY = "hearth.saved_locations.v3";
 const ACTIVE_LOCATION_ID_KEY = "hearth.active_location_id.v3";
-const GOOGLE_MAPS_API_KEY =
-  (import.meta.env["VITE_GOOGLE_MAPS_API_KEY"] as string | undefined) ||
-  "AIzaSyBGk21FLLXX7IZcV9HtT821KM3Be0MHYMg";
+const GOOGLE_MAPS_API_KEY = import.meta.env["VITE_GOOGLE_MAPS_API_KEY"] as string | undefined;
 
 const FALLBACK_DEFAULT_LOCATION: SavedLocation = {
   id: "loc_default",
@@ -126,6 +125,7 @@ interface LocationContextType {
   gpsCoordinates: GpsCoordinates | null;
   gpsStatus: "idle" | "detecting" | "success" | "error";
   gpsError: string | null;
+  permissionState: LocationPermissionState;
   detectGpsLocation: (options?: {
     saveToFirebase?: boolean;
     label?: string;
@@ -141,6 +141,19 @@ const LocationContext = createContext<LocationContextType | null>(null);
 
 function locationsFirebasePath(uid: string) {
   return `customerAddresses/${uid}`;
+}
+
+function geolocationErrorMessage(error: GeolocationPositionError) {
+  switch (error.code) {
+    case error.PERMISSION_DENIED:
+      return "Location permission is blocked. Please allow location access for this website in your browser settings and try again.";
+    case error.POSITION_UNAVAILABLE:
+      return "Your current location could not be determined. Please check your device location/GPS settings and try again.";
+    case error.TIMEOUT:
+      return "Getting your location is taking too long. Please try again.";
+    default:
+      return "Could not detect your current location. Please try again.";
+  }
 }
 
 async function reverseGeocodeCoordinates(coords: GpsCoordinates) {
@@ -203,6 +216,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const [gpsCoordinates, setGpsCoordinates] = useState<GpsCoordinates | null>(null);
   const [gpsStatus, setGpsStatus] = useState<"idle" | "detecting" | "success" | "error">("idle");
   const [gpsError, setGpsError] = useState<string | null>(null);
+  const [permissionState, setPermissionState] = useState<LocationPermissionState>("unknown");
   const [syncing, setSyncing] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -241,54 +255,25 @@ export function LocationProvider({ children }: { children: ReactNode }) {
     }
   }, [locations, activeLocationId, hydrated]);
 
-  // Keep the app pinned to the device's live GPS while there is no saved address selected.
   useEffect(() => {
-    if (!hydrated || typeof window === "undefined" || !("geolocation" in navigator)) return;
-    if (locations.length > 0 || activeLocationId) return;
-
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const coords: GpsCoordinates = {
-          latitude: Math.round(pos.coords.latitude * 100000) / 100000,
-          longitude: Math.round(pos.coords.longitude * 100000) / 100000,
-          accuracy: Math.round(pos.coords.accuracy),
-          timestamp: pos.timestamp,
-        };
-
-        setGpsCoordinates(coords);
-        setGpsStatus("success");
-        setGpsError(null);
-
-        setLocations((prev) => {
-          const withoutPrevGps = prev.filter((p) => p.source !== "gps");
-          return [locationFromCoordinates(coords, null, "gps_current"), ...withoutPrevGps];
-        });
-        setActiveLocationId("gps_current");
-        setSelectionMode("current_gps");
-
-        void reverseGeocodeCoordinates(coords)
-          .then((address) => {
-            if (!address) return;
-            setLocations((prev) =>
-              prev.map((location) =>
-                location.id === "gps_current" ? locationFromCoordinates(coords, address, location.id) : location,
-              ),
-            );
-          })
-          .catch((error) => console.warn("Google reverse geocoding unavailable:", error));
-      },
-      (err) => {
-        console.warn("Live GPS watch unavailable:", err.message);
-        setGpsStatus("error");
-        setGpsError(err.message || "Using fallback coordinates");
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 },
-    );
-
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setPermissionState("unsupported");
+      return;
+    }
+    if (!navigator.permissions?.query) return;
+    let mounted = true;
+    void navigator.permissions
+      .query({ name: "geolocation" })
+      .then((permission) => {
+        if (!mounted) return;
+        setPermissionState(permission.state);
+        permission.onchange = () => setPermissionState(permission.state);
+      })
+      .catch(() => undefined);
     return () => {
-      navigator.geolocation.clearWatch(watchId);
+      mounted = false;
     };
-  }, [hydrated, locations.length, activeLocationId]);
+  }, []);
 
   // Synchronize with Firebase Realtime Database for signed-in user
   useEffect(() => {
@@ -335,7 +320,16 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         const message = "Location services are unavailable in this browser.";
         setGpsStatus("error");
         setGpsError(message);
+        setPermissionState("unsupported");
         toast.error(message);
+        return null;
+      }
+
+      if (permissionState === "denied") {
+        const message = geolocationErrorMessage({ code: 1 } as GeolocationPositionError);
+        setGpsStatus("error");
+        setGpsError(message);
+        toast.error("Location permission required", { description: message });
         return null;
       }
 
@@ -350,6 +344,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             };
             setGpsCoordinates(coords);
             setGpsStatus("success");
+            setPermissionState("granted");
 
             const address = await reverseGeocodeCoordinates(coords).catch((error) => {
               console.warn("Google reverse geocoding unavailable:", error);
@@ -375,19 +370,21 @@ export function LocationProvider({ children }: { children: ReactNode }) {
             resolve(coords);
           },
           (err) => {
-            console.warn("Could not detect live GPS location:", err.message);
+            const message = geolocationErrorMessage(err);
+            console.warn("Could not detect live GPS location:", err.code);
             setGpsStatus("error");
-            setGpsError(err.message || "Could not detect your current location.");
+            setGpsError(message);
+            if (err.code === err.PERMISSION_DENIED) setPermissionState("denied");
             toast.error("Could not detect your current location", {
-              description: "Check browser location permissions and try again.",
+              description: message,
             });
             resolve(null);
           },
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
         );
       });
     },
-    [],
+    [permissionState],
   );
 
   // Save location to Firebase Realtime Database
@@ -509,6 +506,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       gpsCoordinates,
       gpsStatus,
       gpsError,
+      permissionState,
       detectGpsLocation,
       saveLocationToFirebase,
       deleteLocationFromFirebase,
@@ -523,6 +521,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       gpsCoordinates,
       gpsStatus,
       gpsError,
+      permissionState,
       detectGpsLocation,
       saveLocationToFirebase,
       deleteLocationFromFirebase,
@@ -543,6 +542,7 @@ const DEFAULT_LOCATION_FALLBACK: LocationContextType = {
   gpsCoordinates: { latitude: -26.2041, longitude: 28.0473 },
   gpsStatus: "idle",
   gpsError: null,
+  permissionState: "unknown",
   detectGpsLocation: async () => ({ latitude: -26.2041, longitude: 28.0473 }),
   saveLocationToFirebase: async (loc) => loc.id || "loc_new",
   deleteLocationFromFirebase: async () => {},

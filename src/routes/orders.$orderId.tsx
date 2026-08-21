@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { DeliveryMap, deliveryAddressCoordinates } from "@/components/app/delivery-map";
 import {
   money,
   type DriverLiveLocation,
@@ -170,6 +171,11 @@ function TrackOrder() {
     (!order?.delivery_address && (order?.delivery_fee ?? 0) === 0);
 
   const stageProgression = isPickup ? PICKUP_STAGE_PROGRESSION : DELIVERY_STAGE_PROGRESSION;
+  const customerCoordinates = deliveryAddressCoordinates(order.delivery_address);
+  const driverLastUpdated = driverLocation?.updated_at
+    ? Math.max(0, Math.round((Date.now() - new Date(driverLocation.updated_at).getTime()) / 1000))
+    : null;
+  const driverIsStale = driverLastUpdated === null || driverLastUpdated > 30;
 
   // Resolve effective payment details (§3.8)
   const paymentMethod = paymentEvidence?.method || order?.payment_method || "card";
@@ -331,46 +337,20 @@ function TrackOrder() {
 
         {/* Live Map or Tracking Area */}
         <div className="relative aspect-[16/10] overflow-hidden rounded-3xl bg-secondary ring-1 ring-border">
-          <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(var(--color-border)_1px,transparent_1px),linear-gradient(90deg,var(--color-border)_1px,transparent_1px)] [background-size:28px_28px]" />
-
-          {!isPickup && driverLocation ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-              <div className="flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-xs font-black text-primary-foreground shadow-lg">
-                <Navigation className="size-4 animate-pulse" />
-                Live GPS: {driverLocation.latitude.toFixed(4)},{" "}
-                {driverLocation.longitude.toFixed(4)}
-              </div>
-              {driverLocation.speed ? (
-                <span className="label-mono mt-2 rounded-md bg-background/80 px-2 py-1 text-[10px] backdrop-blur">
-                  Speed: {Math.round(driverLocation.speed)} km/h
-                </span>
-              ) : null}
-            </div>
+          {!isPickup && (customerCoordinates || driverLocation) ? (
+            <DeliveryMap customerLocation={customerCoordinates} driverLocation={driverLocation} />
           ) : (
-            <>
-              <div className="absolute top-1/2 left-6 size-3 -translate-y-1/2 rounded-full bg-foreground" />
-              <div className="absolute top-1/2 right-6 size-3 -translate-y-1/2 rounded-full bg-primary" />
-              <div className="absolute top-1/2 right-6 left-6 h-0.5 -translate-y-1/2 bg-border" />
-              <div
-                className="absolute top-1/2 left-6 h-0.5 -translate-y-1/2 bg-primary transition-all duration-1000"
-                style={{ width: `calc((100% - 48px) * ${progressPercent / 100})` }}
-              />
-              <div
-                className="absolute top-1/2 grid size-9 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-xl bg-primary text-[10px] font-black text-primary-foreground shadow-xl transition-all duration-1000"
-                style={{ left: `calc(24px + (100% - 48px) * ${progressPercent / 100})` }}
-              >
-                {isPickup ? "KTC" : order.driver_id ? "DRV" : "KTC"}
-              </div>
-            </>
+            <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 p-6 text-center">
+              <MapPin className="size-6 text-muted-foreground" />
+              <p className="text-sm font-bold">{isPickup ? `Pickup at ${order.restaurant_name}` : "Delivery location pending"}</p>
+              <p className="text-xs text-muted-foreground">The map will appear when coordinates are available.</p>
+            </div>
           )}
-
-          <span className="label-mono absolute bottom-4 left-4 rounded-full bg-background/90 px-3 py-1.5 ring-1 ring-border backdrop-blur max-w-[80%] truncate">
-            {isPickup
-              ? `Pickup at ${order.restaurant_name}`
-              : order.delivery_address
-                ? `${order.delivery_address.street}, ${order.delivery_address.city}`
-                : "Delivery"}
-          </span>
+          {!isPickup && order.driver_id ? (
+            <span className="absolute bottom-4 left-4 rounded-full bg-background/90 px-3 py-1.5 text-xs font-bold ring-1 ring-border backdrop-blur">
+              {driverIsStale ? "Driver location temporarily unavailable" : driverLastUpdated === 0 ? "Live" : `Last updated ${driverLastUpdated}s ago`}
+            </span>
+          ) : null}
         </div>
 
         {/* ETA & Status Banner */}

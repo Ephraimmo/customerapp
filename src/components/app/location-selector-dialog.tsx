@@ -28,6 +28,7 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
     activeLocation,
     selectLocation,
     detectGpsLocation,
+    gpsError,
     saveLocationToFirebase,
     deleteLocationFromFirebase,
   } = useLocation();
@@ -339,6 +340,19 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
 
               {/* Coordinates Section with Live GPS Auto-fill Button & Editable Lat/Lng */}
               <div className="rounded-2xl bg-secondary/50 p-4 border border-border space-y-3">
+                {gpsError ? (
+                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+                    <p className="font-bold">Location permission required</p>
+                    <p className="mt-1">{gpsError}</p>
+                    <p className="mt-2 text-foreground/80">
+                      Open the lock/site-settings icon next to the website address, allow Location,
+                      reload the page, then try again.
+                    </p>
+                    <button type="button" onClick={handleLiveGps} className="mt-2 font-bold underline">
+                      Try again
+                    </button>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="block text-xs font-black text-foreground">
