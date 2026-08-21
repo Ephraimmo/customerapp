@@ -47,7 +47,7 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
 
   if (!open) return null;
 
-  // Live GPS auto-detects only Latitude & Longitude, leaving all other fields manual
+  // Current location fills only latitude and longitude, leaving the other fields editable.
   async function handleLiveGps() {
     setDetectingGps(true);
     try {
@@ -135,7 +135,7 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
               <p className="text-[11px] sm:text-xs text-muted-foreground">
                 {showList
                   ? `Saved in Firebase Database (${locations.length})`
-                  : "Manual details • Click Live GPS for coordinates"}
+                  : "Manual details • Use current location for coordinates"}
               </p>
             </div>
           </div>
@@ -338,7 +338,7 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                 </div>
               </div>
 
-              {/* Coordinates Section with Live GPS Auto-fill Button & Editable Lat/Lng */}
+              {/* Current location button and editable coordinates */}
               <div className="rounded-2xl bg-secondary/50 p-4 border border-border space-y-3">
                 {gpsError ? (
                   <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
@@ -359,11 +359,11 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                       Geographic GPS Coordinates
                     </span>
                     <span className="text-[10px] text-muted-foreground">
-                      Auto-fill via Live GPS or edit numbers directly
+                      Use your device location or edit numbers directly
                     </span>
                   </div>
 
-                  {/* Live GPS Button */}
+                  {/* One-time device location request */}
                   <button
                     type="button"
                     onClick={handleLiveGps}
@@ -371,7 +371,7 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                     className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-1.5 text-xs font-black tracking-wider uppercase text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90 active:scale-95 transition-all cursor-pointer disabled:opacity-60"
                   >
                     <Crosshair className={`size-3.5 ${detectingGps ? "animate-spin" : ""}`} />
-                    {detectingGps ? "Acquiring…" : "Live GPS"}
+                    {detectingGps ? "Getting your location…" : "Current location"}
                   </button>
                 </div>
 
