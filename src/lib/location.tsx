@@ -104,19 +104,6 @@ const LOCATIONS_STORAGE_KEY = "hearth.saved_locations.v3";
 const ACTIVE_LOCATION_ID_KEY = "hearth.active_location_id.v3";
 const GOOGLE_MAPS_API_KEY = import.meta.env["VITE_GOOGLE_MAPS_API_KEY"] as string | undefined;
 
-const FALLBACK_DEFAULT_LOCATION: SavedLocation = {
-  id: "loc_default",
-  label: "Current GPS",
-  street: "Detecting location…",
-  city: "Johannesburg",
-  postal_code: "2000",
-  latitude: -26.2041,
-  longitude: 28.0473,
-  notes: null,
-  is_default: true,
-  source: "gps",
-};
-
 interface LocationContextType {
   locations: SavedLocation[];
   activeLocation: SavedLocation | null;
@@ -539,11 +526,11 @@ const DEFAULT_LOCATION_FALLBACK: LocationContextType = {
   activeLocation: null,
   selectionMode: "saved",
   setSelectionMode: () => {},
-  gpsCoordinates: { latitude: -26.2041, longitude: 28.0473 },
+  gpsCoordinates: null,
   gpsStatus: "idle",
   gpsError: null,
   permissionState: "unknown",
-  detectGpsLocation: async () => ({ latitude: -26.2041, longitude: 28.0473 }),
+  detectGpsLocation: async () => null,
   saveLocationToFirebase: async (loc) => loc.id || "loc_new",
   deleteLocationFromFirebase: async () => {},
   selectLocation: () => {},

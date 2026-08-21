@@ -38,8 +38,8 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("Johannesburg");
   const [postalCode, setPostalCode] = useState("2000");
-  const [latitude, setLatitude] = useState("-26.2041");
-  const [longitude, setLongitude] = useState("28.0473");
+  const [latitude, setLatitude] = useState("");
+  const [longitude, setLongitude] = useState("");
   const [notes, setNotes] = useState("");
   const [isDefault, setIsDefault] = useState(false);
   const [detectingGps, setDetectingGps] = useState(false);
@@ -384,7 +384,7 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                     <input
                       type="number"
                       step="any"
-                      placeholder="-26.2041"
+                      placeholder="Current latitude"
                       value={latitude}
                       onChange={(e) => setLatitude(e.target.value)}
                       required
@@ -398,7 +398,7 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                     <input
                       type="number"
                       step="any"
-                      placeholder="28.0473"
+                      placeholder="Current longitude"
                       value={longitude}
                       onChange={(e) => setLongitude(e.target.value)}
                       required
