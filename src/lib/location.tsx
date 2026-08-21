@@ -312,11 +312,11 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         return null;
       }
 
-      if (permissionState === "denied") {
-        const message = geolocationErrorMessage({ code: 1 } as GeolocationPositionError);
+      if (!window.isSecureContext && window.location.hostname !== "localhost") {
+        const message = "Location access requires a secure HTTPS connection. Please reopen this website using HTTPS and try again.";
         setGpsStatus("error");
         setGpsError(message);
-        toast.error("Location permission required", { description: message });
+        toast.error("Secure connection required", { description: message });
         return null;
       }
 
@@ -371,7 +371,7 @@ export function LocationProvider({ children }: { children: ReactNode }) {
         );
       });
     },
-    [permissionState],
+    [],
   );
 
   // Save location to Firebase Realtime Database
