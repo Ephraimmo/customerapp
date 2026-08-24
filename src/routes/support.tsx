@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
@@ -72,9 +72,17 @@ const QUICK_PROMPTS = [
   "Payment or refund question",
 ];
 
+const PRIORITY_OPTIONS: Array<{ id: TicketPriority; label: string; hint: string }> = [
+  { id: "low", label: "Low", hint: "General question" },
+  { id: "medium", label: "Medium", hint: "Standard request" },
+  { id: "high", label: "High", hint: "Delivery issue" },
+  { id: "urgent", label: "Urgent", hint: "Needs immediate help" },
+];
+
 function SupportPage() {
   const { ticketId: searchTicketId, orderId: searchOrderId } = Route.useSearch();
   const navigate = Route.useNavigate();
+  const router = useRouter();
   const { user } = useAuth();
   const { orders } = useCart();
 
@@ -105,6 +113,7 @@ function SupportPage() {
   const [newPriority, setNewPriority] = useState<TicketPriority>("medium");
   const [selectedOrderId, setSelectedOrderId] = useState<string>(searchOrderId || "");
   const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
+  const [showTicketAttachment, setShowTicketAttachment] = useState(false);
   const [creatingTicket, setCreatingTicket] = useState(false);
 
   // Chat message composer state
@@ -152,6 +161,20 @@ function SupportPage() {
       return true;
     });
   }, [tickets, statusFilter]);
+
+  // Back returns to where the user came from: the linked order if opened from
+  // one, otherwise the previous screen, falling back to the account page.
+  function handleSupportBack() {
+    if (searchOrderId) {
+      void navigate({ to: "/orders/$orderId", params: { orderId: searchOrderId } });
+      return;
+    }
+    if (router.history.canGoBack()) {
+      router.history.back();
+      return;
+    }
+    void navigate({ to: "/account" });
+  }
 
   // Handle creating new support ticket (§5.1)
   async function handleCreateTicket(e: React.FormEvent) {
@@ -234,13 +257,14 @@ function SupportPage() {
       <header className="sticky top-0 z-40 md:static border-b border-border bg-background/95 px-4 pt-4 pb-3 backdrop-blur-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link
-              to="/account"
-              aria-label="Back to account"
-              className="grid size-10 place-items-center rounded-full bg-secondary ring-1 ring-border hover:bg-secondary/80 transition-colors"
+            <button
+              type="button"
+              onClick={handleSupportBack}
+              aria-label="Go back"
+              className="grid size-10 place-items-center rounded-full bg-secondary ring-1 ring-border hover:bg-secondary/80 transition-colors cursor-pointer"
             >
               <ArrowLeft className="size-4" />
-            </Link>
+            </button>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg font-black tracking-tight text-foreground">
@@ -281,15 +305,17 @@ function SupportPage() {
           >
             {/* Filter Tabs */}
             <div className="flex items-center gap-1 bg-secondary/80 p-1 rounded-2xl border border-border">
-              {[
-                { id: "all", label: "All Tickets" },
-                { id: "open", label: "Active" },
-                { id: "resolved", label: "Resolved" },
-              ].map((tab) => (
+              {(
+                [
+                  { id: "all", label: "All Tickets" },
+                  { id: "open", label: "Active" },
+                  { id: "resolved", label: "Resolved" },
+                ] as Array<{ id: typeof statusFilter; label: string }>
+              ).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setStatusFilter(tab.id as any)}
+                  onClick={() => setStatusFilter(tab.id)}
                   className={`flex-1 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     statusFilter === tab.id
                       ? "bg-background text-primary shadow-sm"
@@ -410,14 +436,18 @@ function SupportPage() {
           <div className="md:col-span-7 lg:col-span-8">
             {showNewTicketModal ? (
               /* New Ticket Form (§5.1) */
-              <div className="rounded-3xl bg-card p-5 sm:p-6 border border-border shadow-xl space-y-4">
-                <div className="flex items-center justify-between border-b border-border/80 pb-3">
-                  <div className="flex items-center gap-2">
-                    <MessageSquarePlus className="size-5 text-primary" />
+              <div className="rounded-3xl bg-card border border-border shadow-xl overflow-hidden">
+                <div className="flex items-start justify-between gap-3 border-b border-border/80 bg-gradient-to-r from-primary/5 via-transparent to-transparent p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20">
+                      <MessageSquarePlus className="size-5" />
+                    </div>
                     <div>
-                      <h2 className="text-base font-black text-foreground">Open Support Inquiry</h2>
-                      <p className="text-xs text-muted-foreground">
-                        Direct communication with ForkFleet Operations
+                      <h2 className="text-base font-black text-foreground">
+                        Open a Support Inquiry
+                      </h2>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Tell us what happened — our team usually replies within minutes.
                       </p>
                     </div>
                   </div>
@@ -425,52 +455,83 @@ function SupportPage() {
                   <button
                     type="button"
                     onClick={() => setShowNewTicketModal(false)}
-                    className="grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground hover:text-foreground cursor-pointer"
+                    aria-label="Close inquiry form"
+                    className="grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
                   >
                     <X className="size-4" />
                   </button>
                 </div>
 
-                <form onSubmit={handleCreateTicket} className="space-y-3.5 text-xs">
+                <form onSubmit={handleCreateTicket} className="space-y-5 p-5 sm:p-6 text-xs">
                   {/* Subject */}
-                  <div className="space-y-1">
-                    <label className="label-mono block text-muted-foreground font-bold">
-                      Subject / Question *
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="ticket-subject"
+                      className="label-mono block text-muted-foreground font-bold"
+                    >
+                      Subject *
                     </label>
                     <input
+                      id="ticket-subject"
                       type="text"
                       required
-                      placeholder="e.g. Where is my delivery, Food item issue, Need driver assistance"
+                      placeholder="Summarise your issue in one line"
                       value={newSubject}
                       onChange={(e) => setNewSubject(e.target.value)}
                       className="h-11 w-full rounded-xl bg-secondary px-3.5 text-xs font-bold ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
                     />
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {QUICK_PROMPTS.map((prompt) => (
+                        <button
+                          key={prompt}
+                          type="button"
+                          onClick={() => {
+                            setNewSubject(prompt);
+                            if (!newMessage) setNewMessage(prompt);
+                          }}
+                          className={`rounded-lg px-2.5 py-1 text-[10px] font-bold border cursor-pointer transition-colors ${
+                            newSubject === prompt
+                              ? "bg-primary/10 text-primary border-primary/40"
+                              : "bg-secondary/80 text-muted-foreground hover:text-primary hover:bg-secondary border-border"
+                          }`}
+                        >
+                          {prompt}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  {/* Quick Subject Prompts */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {QUICK_PROMPTS.map((prompt) => (
-                      <button
-                        key={prompt}
-                        type="button"
-                        onClick={() => {
-                          setNewSubject(prompt);
-                          if (!newMessage) setNewMessage(prompt);
-                        }}
-                        className="rounded-lg bg-secondary/80 px-2.5 py-1 text-[10px] font-bold text-muted-foreground hover:text-primary hover:bg-secondary border border-border cursor-pointer transition-colors"
-                      >
-                        + {prompt}
-                      </button>
-                    ))}
+                  {/* Message Body */}
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="ticket-message"
+                      className="label-mono block text-muted-foreground font-bold"
+                    >
+                      Describe your issue *
+                    </label>
+                    <textarea
+                      id="ticket-message"
+                      required
+                      rows={5}
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      placeholder="Include what happened, when it happened and what you'd like us to do…"
+                      className="w-full rounded-2xl bg-secondary p-3.5 text-xs ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30 resize-none leading-relaxed"
+                    />
                   </div>
 
-                  {/* Link Order (Optional) */}
+                  {/* Context: linked order */}
                   {orders.length > 0 ? (
-                    <div className="space-y-1">
-                      <label className="label-mono block text-muted-foreground font-bold">
-                        Link Recent Order (Optional)
+                    <div className="space-y-2">
+                      <label
+                        htmlFor="ticket-order"
+                        className="label-mono block text-muted-foreground font-bold"
+                      >
+                        Link an order{" "}
+                        <span className="normal-case font-medium">(helps us help you faster)</span>
                       </label>
                       <select
+                        id="ticket-order"
                         aria-label="Link to order"
                         value={selectedOrderId}
                         onChange={(e) => {
@@ -482,7 +543,7 @@ function SupportPage() {
                         }}
                         className="h-11 w-full rounded-xl bg-secondary px-3 text-xs font-bold ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
                       >
-                        <option value="">None (General Inquiry)</option>
+                        <option value="">No specific order — general inquiry</option>
                         {orders.map((o) => (
                           <option key={o.id} value={o.id}>
                             #{o.order_number || o.id} • {o.restaurant_name} ({o.status})
@@ -492,96 +553,109 @@ function SupportPage() {
                     </div>
                   ) : null}
 
-                  {/* Priority & Channel */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="label-mono block text-muted-foreground font-bold">
-                        Priority Level
-                      </label>
-                      <select
-                        aria-label="Ticket priority"
-                        value={newPriority}
-                        onChange={(e) => setNewPriority(e.target.value as TicketPriority)}
-                        className="h-11 w-full rounded-xl bg-secondary px-3 text-xs font-bold ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
-                      >
-                        <option value="low">Low (General question)</option>
-                        <option value="medium">Medium (Standard request)</option>
-                        <option value="high">High (Active delivery issue)</option>
-                        <option value="urgent">Urgent (Immediate assistance)</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="label-mono block text-muted-foreground font-bold">
-                        Contact Name
-                      </label>
-                      <input
-                        type="text"
-                        disabled
-                        value={customerName}
-                        className="h-11 w-full rounded-xl bg-secondary/50 px-3 text-xs font-bold text-muted-foreground ring-1 ring-border"
-                      />
+                  {/* Priority */}
+                  <div className="space-y-2">
+                    <span className="label-mono block text-muted-foreground font-bold">
+                      How urgent is it?
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {PRIORITY_OPTIONS.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setNewPriority(p.id)}
+                          className={`rounded-xl px-2 py-2 text-left border cursor-pointer transition-colors ${
+                            newPriority === p.id
+                              ? p.id === "urgent"
+                                ? "bg-destructive/10 border-destructive/40 text-destructive"
+                                : "bg-primary/10 border-primary/40 text-primary"
+                              : "bg-secondary/60 border-border text-muted-foreground hover:text-foreground hover:bg-secondary"
+                          }`}
+                        >
+                          <span className="block text-[11px] font-black uppercase tracking-wider">
+                            {p.label}
+                          </span>
+                          <span className="block text-[10px] mt-0.5 opacity-80">{p.hint}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  {/* Message Body */}
-                  <div className="space-y-1">
-                    <label className="label-mono block text-muted-foreground font-bold">
-                      Message Details *
-                    </label>
-                    <textarea
-                      required
-                      rows={4}
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Please describe your issue or question in detail..."
-                      className="w-full rounded-2xl bg-secondary p-3.5 text-xs ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                    />
+                  {/* Contact details (read-only summary) */}
+                  <div className="rounded-2xl bg-secondary/50 border border-border p-3.5 flex items-center gap-3">
+                    <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary font-black text-[11px]">
+                      {customerName.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{customerName}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {[customerEmail, customerPhone].filter(Boolean).join(" • ") ||
+                          "Signed-in customer"}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Optional Attachment Link */}
-                  <div className="space-y-1">
-                    <label className="label-mono block text-muted-foreground font-bold">
-                      Attachment URL / Screenshot (Optional)
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="https://... image or receipt link"
-                      value={newAttachmentUrl}
-                      onChange={(e) => setNewAttachmentUrl(e.target.value)}
-                      className="h-10 w-full rounded-xl bg-secondary px-3.5 text-xs ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/80">
+                  {/* Optional Attachment Link (collapsed by default) */}
+                  <div className="space-y-2">
                     <button
                       type="button"
-                      onClick={() => setShowNewTicketModal(false)}
-                      className="h-10 px-4 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+                      onClick={() => setShowTicketAttachment((v) => !v)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-bold text-muted-foreground hover:text-primary cursor-pointer transition-colors"
                     >
-                      Cancel
+                      <ImageIcon className="size-3.5" />
+                      {showTicketAttachment || newAttachmentUrl
+                        ? "Hide attachment link"
+                        : "Add a screenshot or document link (optional)"}
                     </button>
-                    <button
-                      type="submit"
-                      disabled={creatingTicket}
-                      className="h-10 px-6 rounded-xl bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider shadow-md hover:bg-primary/90 disabled:opacity-50 cursor-pointer transition-all flex items-center gap-1.5"
-                    >
-                      <Send className="size-3.5" />
-                      <span>{creatingTicket ? "Opening Ticket…" : "Submit Ticket"}</span>
-                    </button>
+                    {showTicketAttachment || newAttachmentUrl ? (
+                      <input
+                        type="url"
+                        placeholder="https://… link to an image or receipt"
+                        value={newAttachmentUrl}
+                        onChange={(e) => setNewAttachmentUrl(e.target.value)}
+                        className="h-10 w-full rounded-xl bg-secondary px-3.5 text-xs ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-3 border-t border-border/80">
+                    <p className="text-[11px] text-muted-foreground hidden sm:block">
+                      You'll be able to continue the conversation in this thread.
+                    </p>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => setShowNewTicketModal(false)}
+                        className="h-10 px-4 rounded-xl text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-secondary cursor-pointer transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={creatingTicket}
+                        className="h-10 px-6 rounded-xl bg-primary text-primary-foreground text-xs font-black uppercase tracking-wider shadow-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-all flex items-center gap-1.5"
+                      >
+                        <Send className="size-3.5" />
+                        <span>{creatingTicket ? "Opening Ticket…" : "Submit Inquiry"}</span>
+                      </button>
+                    </div>
                   </div>
                 </form>
               </div>
             ) : activeTicketId && activeTicket ? (
               /* Live Chat Thread Conversation View (§5.2 & §5.3) */
-              <div className="rounded-3xl bg-card border border-border shadow-xl flex flex-col h-[650px] overflow-hidden">
+              <div className="rounded-3xl bg-card border border-border shadow-xl flex flex-col h-[calc(100dvh-16.5rem)] min-h-[440px] md:h-[650px] md:min-h-[650px] overflow-hidden">
                 {/* Thread Header */}
                 <div className="p-4 border-b border-border/80 bg-card/95 backdrop-blur-sm flex items-center justify-between">
                   <div className="flex items-center gap-3 min-w-0">
                     <button
                       type="button"
-                      onClick={() => setActiveTicketId(null)}
-                      className="md:hidden grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground cursor-pointer"
+                      onClick={() => {
+                        setActiveTicketId(null);
+                        void navigate({ search: {} });
+                      }}
+                      aria-label="Back to all tickets"
+                      className="md:hidden grid size-8 place-items-center rounded-full bg-secondary text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
                     >
                       <ArrowLeft className="size-4" />
                     </button>
