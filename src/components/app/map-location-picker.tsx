@@ -65,6 +65,7 @@ export function MapLocationPicker({
   const geocodeSequence = useRef(0);
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [mapType, setMapType] = useState<"roadmap" | "satellite">("roadmap");
   const [selected, setSelected] = useState(() => ({
     latitude: initialLatitude ?? gpsCoordinates?.latitude ?? fallbackPreset().latitude,
@@ -138,6 +139,7 @@ export function MapLocationPicker({
         if (cancelled || !mapElement.current || typeof window === "undefined") return;
         const g = google as unknown as GoogleMapsNamespace | undefined;
         if (!g?.maps?.Map) {
+          setLoadError("Google Maps did not initialize");
           setStatus("error");
           return;
         }
@@ -159,8 +161,11 @@ export function MapLocationPicker({
         setStatus("ready");
         settleOnCenter();
       })
-      .catch(() => {
-        if (!cancelled) setStatus("error");
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : "Google Maps failed to load");
+          setStatus("error");
+        }
       });
 
     return () => {
@@ -307,6 +312,7 @@ export function MapLocationPicker({
           <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 p-6 text-center">
             <MapPin className="size-6 text-muted-foreground" />
             <p className="text-sm font-bold">Map temporarily unavailable.</p>
+            {loadError ? <p className="text-[11px] text-muted-foreground">{loadError}</p> : null}
             <p className="text-xs text-muted-foreground">
               You can still enter your coordinates manually in the form.
             </p>
