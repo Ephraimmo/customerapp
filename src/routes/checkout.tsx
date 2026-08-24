@@ -70,7 +70,24 @@ function CheckoutPage() {
   } = useCart();
 
   const { user } = useAuth();
-  const { activeLocation } = useLocation();
+  const { activeLocation, gpsCoordinates } = useLocation();
+  const deliveryLocation = useMemo(() => {
+    if (activeLocation && activeLocation.latitude != null && activeLocation.longitude != null) {
+      return activeLocation;
+    }
+    if (gpsCoordinates && gpsCoordinates.latitude != null && gpsCoordinates.longitude != null) {
+      return {
+        label: "Current GPS Position",
+        street: `GPS Fix (${gpsCoordinates.latitude.toFixed(4)}, ${gpsCoordinates.longitude.toFixed(4)})`,
+        city: "",
+        postal_code: "",
+        latitude: gpsCoordinates.latitude,
+        longitude: gpsCoordinates.longitude,
+        notes: null,
+      };
+    }
+    return null;
+  }, [activeLocation, gpsCoordinates]);
 
   const [paymentId, setPaymentId] = useState<PaymentMethod>("card");
   const [instructions, setInstructions] = useState("");
@@ -197,7 +214,7 @@ function CheckoutPage() {
   async function submit() {
     if (placing || (!canCheckout && mode === "delivery")) return;
 
-    if (mode === "delivery" && !activeLocation) {
+    if (mode === "delivery" && !deliveryLocation) {
       toast.error("Please add at least one delivery address to place your order.");
       setOpenLocationDialog(true);
       return;
@@ -217,15 +234,15 @@ function CheckoutPage() {
       let deliveryAddress: DeliveryAddress | null = null;
 
       if (mode === "delivery") {
-        if (activeLocation) {
+        if (deliveryLocation) {
           deliveryAddress = {
-            label: activeLocation.label,
-            street: activeLocation.street,
-            city: activeLocation.city,
-            postal_code: activeLocation.postal_code,
-            latitude: activeLocation.latitude,
-            longitude: activeLocation.longitude,
-            notes: instructions.trim() || activeLocation.notes || null,
+            label: deliveryLocation.label,
+            street: deliveryLocation.street,
+            city: deliveryLocation.city,
+            postal_code: deliveryLocation.postal_code,
+            latitude: deliveryLocation.latitude,
+            longitude: deliveryLocation.longitude,
+            notes: instructions.trim() || deliveryLocation.notes || null,
           };
         }
       }
@@ -335,12 +352,12 @@ function CheckoutPage() {
               </Link>
             </div>
 
-            {activeLocation ? (
+            {deliveryLocation ? (
               <div className="rounded-xl bg-background/80 p-3 ring-1 ring-border/80 text-xs space-y-1">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-bold text-foreground">
                     <MapPin className="size-3.5 text-primary shrink-0" />
-                    <span>{activeLocation.label}</span>
+                    <span>{deliveryLocation.label}</span>
                   </div>
                   {selectedBranch ? (
                     <span className="rounded bg-secondary px-2 py-0.5 text-[9px] font-bold text-muted-foreground border border-border">
@@ -349,7 +366,7 @@ function CheckoutPage() {
                   ) : null}
                 </div>
                 <p className="text-muted-foreground pl-5 text-[11px]">
-                  {activeLocation.street}, {activeLocation.city} {activeLocation.postal_code || ""}
+                  {deliveryLocation.street}, {deliveryLocation.city} {deliveryLocation.postal_code || ""}
                 </p>
               </div>
             ) : (
@@ -761,7 +778,7 @@ function CheckoutPage() {
       </main>
 
       <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md md:max-w-2xl border-t border-border bg-background/95 px-4 pt-4 pb-7 backdrop-blur">
-        {mode === "delivery" && !activeLocation ? (
+        {mode === "delivery" && !deliveryLocation ? (
           <button
             type="button"
             onClick={() => setOpenLocationDialog(true)}
@@ -790,7 +807,7 @@ function CheckoutPage() {
           >
             {isOutOfRange
               ? "Delivery address out of range"
-              : !activeLocation && mode === "delivery"
+              : !deliveryLocation && mode === "delivery"
                 ? "Select a delivery address in cart"
                 : "Cannot place order"}
           </button>
