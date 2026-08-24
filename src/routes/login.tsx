@@ -10,12 +10,14 @@ export const Route = createFileRoute("/login")({
       { title: "Sign in or Register — Hearth" },
       {
         name: "description",
-        content: "Sign in or create an account on Hearth to keep your cart, addresses, loyalty points and orders saved.",
+        content:
+          "Sign in or create an account on Hearth to keep your cart, addresses, loyalty points and orders saved.",
       },
       { property: "og:title", content: "Sign in or Register — Hearth" },
       {
         property: "og:description",
-        content: "Your cart and loyalty rewards follow your account, so it's waiting whenever you come back.",
+        content:
+          "Your cart and loyalty rewards follow your account, so it's waiting whenever you come back.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -28,6 +30,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const { signIn, signUp, user, signOut } = useAuth();
   const [tab, setTab] = useState<"signin" | "register">("signin");
+  const [submitting, setSubmitting] = useState(false);
 
   // Sign In State
   const [email, setEmail] = useState("");
@@ -41,31 +44,37 @@ function LoginPage() {
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerError, setRegisterError] = useState<string | null>(null);
 
-  function submitLogin(e: React.FormEvent) {
+  async function submitLogin(e: React.FormEvent) {
     e.preventDefault();
-    const result = signIn(email, password);
+    if (submitting) return;
+    setSubmitting(true);
+    setError(null);
+    const result = await signIn(email, password);
+    setSubmitting(false);
     if (!result.ok) {
       setError(result.error ?? "Sign in failed.");
       return;
     }
-    setError(null);
     toast.success("Welcome back!", { description: "Signed in successfully." });
     void navigate({ to: "/cart" });
   }
 
-  function submitRegister(e: React.FormEvent) {
+  async function submitRegister(e: React.FormEvent) {
     e.preventDefault();
-    const result = signUp({
+    if (submitting) return;
+    setSubmitting(true);
+    setRegisterError(null);
+    const result = await signUp({
       name: registerName,
       email: registerEmail,
       phone: registerPhone,
       password: registerPassword,
     });
+    setSubmitting(false);
     if (!result.ok) {
       setRegisterError(result.error ?? "Registration failed.");
       return;
     }
-    setRegisterError(null);
     toast.success("Account created!", { description: "You are now signed in." });
     void navigate({ to: "/cart" });
   }
@@ -84,7 +93,9 @@ function LoginPage() {
           <h1 className="text-lg leading-none font-black tracking-tight">
             {tab === "signin" ? "Sign in" : "Create Account"}
           </h1>
-          <p className="label-mono mt-1 text-muted-foreground">Keep your cart & loyalty points saved</p>
+          <p className="label-mono mt-1 text-muted-foreground">
+            Keep your cart & loyalty points saved
+          </p>
         </div>
       </header>
 
@@ -93,7 +104,9 @@ function LoginPage() {
           <section className="rounded-3xl bg-secondary p-5 ring-1 ring-border space-y-3">
             <span className="label-mono text-muted-foreground">Signed in as</span>
             <p className="text-base font-bold text-foreground">{user.name}</p>
-            <p className="label-mono text-xs text-muted-foreground">{user.email} • {user.phone}</p>
+            <p className="label-mono text-xs text-muted-foreground">
+              {user.email} • {user.phone}
+            </p>
             <div className="pt-2 flex gap-2">
               <Link
                 to="/cart"
@@ -150,7 +163,10 @@ function LoginPage() {
             {tab === "signin" ? (
               <form onSubmit={submitLogin} className="space-y-4 pt-1">
                 <div>
-                  <label htmlFor="email" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                  <label
+                    htmlFor="email"
+                    className="label-mono mb-1.5 block text-muted-foreground text-xs"
+                  >
                     Email
                   </label>
                   <input
@@ -165,7 +181,10 @@ function LoginPage() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="password" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                  <label
+                    htmlFor="password"
+                    className="label-mono mb-1.5 block text-muted-foreground text-xs"
+                  >
                     Password
                   </label>
                   <input
@@ -182,16 +201,20 @@ function LoginPage() {
                 {error ? <p className="text-xs font-bold text-destructive">{error}</p> : null}
                 <button
                   type="submit"
-                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-xl shadow-primary/25 active:scale-[0.98] cursor-pointer hover:bg-primary/90 transition-all"
+                  disabled={submitting}
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-xl shadow-primary/25 active:scale-[0.98] cursor-pointer hover:bg-primary/90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <LogIn className="size-4" aria-hidden />
-                  Sign in
+                  {submitting ? "Signing in…" : "Sign in"}
                 </button>
               </form>
             ) : (
               <form onSubmit={submitRegister} className="space-y-4 pt-1">
                 <div>
-                  <label htmlFor="reg-name" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                  <label
+                    htmlFor="reg-name"
+                    className="label-mono mb-1.5 block text-muted-foreground text-xs"
+                  >
                     Full Name *
                   </label>
                   <input
@@ -206,7 +229,10 @@ function LoginPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label htmlFor="reg-email" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                    <label
+                      htmlFor="reg-email"
+                      className="label-mono mb-1.5 block text-muted-foreground text-xs"
+                    >
                       Email *
                     </label>
                     <input
@@ -220,7 +246,10 @@ function LoginPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="reg-phone" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                    <label
+                      htmlFor="reg-phone"
+                      className="label-mono mb-1.5 block text-muted-foreground text-xs"
+                    >
                       Phone (optional)
                     </label>
                     <input
@@ -234,7 +263,10 @@ function LoginPage() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="reg-pw" className="label-mono mb-1.5 block text-muted-foreground text-xs">
+                  <label
+                    htmlFor="reg-pw"
+                    className="label-mono mb-1.5 block text-muted-foreground text-xs"
+                  >
                     Password *
                   </label>
                   <input
@@ -247,17 +279,19 @@ function LoginPage() {
                     className="h-12 w-full rounded-2xl bg-secondary px-4 text-sm ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
-                {registerError ? <p className="text-xs font-bold text-destructive">{registerError}</p> : null}
+                {registerError ? (
+                  <p className="text-xs font-bold text-destructive">{registerError}</p>
+                ) : null}
                 <button
                   type="submit"
-                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-xl shadow-primary/25 active:scale-[0.98] cursor-pointer hover:bg-primary/90 transition-all"
+                  disabled={submitting}
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-xl shadow-primary/25 active:scale-[0.98] cursor-pointer hover:bg-primary/90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <UserPlus className="size-4" aria-hidden />
-                  Create Account
+                  {submitting ? "Creating account…" : "Create Account"}
                 </button>
               </form>
             )}
-
           </div>
         )}
       </main>

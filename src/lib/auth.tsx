@@ -7,7 +7,19 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { rtdbSet } from "./firebase";
+import {
+  browserLocalPersistence,
+  createUserWithEmailAndPassword,
+  getAuth,
+  onAuthStateChanged,
+  setPersistence,
+  signInWithEmailAndPassword,
+  signOut as firebaseSignOut,
+  updateProfile,
+  type Auth,
+  type User as FirebaseUser,
+} from "firebase/auth";
+import { getFirebaseApp, rtdbGet, rtdbSet } from "./firebase";
 
 export type DemoUser = {
   /** Stable id used as the Firebase key for this customer's saved cart and orders. */
@@ -18,153 +30,191 @@ export type DemoUser = {
   phone: string;
 };
 
-export type StoredAccount = DemoUser & { password: string; created_at?: string };
-
-/** Demo accounts shipped with the app so the saved-cart flow can be tried out. */
-export const demoAccounts: Array<DemoUser & { password: string }> = [
-  {
-    uid: "demo-amara",
-    name: "Amara Mitchell",
-    email: "demo@hearth.app",
-    password: "hearth123",
-    initials: "AM",
-    phone: "+27 82 555 0142",
-  },
-  {
-    uid: "demo-thabo",
-    name: "Thabo Nkosi",
-    email: "thabo@hearth.app",
-    password: "hearth123",
-    initials: "TN",
-    phone: "+27 71 555 0088",
-  },
-];
-
 type AuthState = {
   user: DemoUser | null;
   hydrated: boolean;
-  signIn: (email: string, password: string) => { ok: boolean; error?: string };
+  signIn: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   signUp: (input: {
     name: string;
     email: string;
     password: string;
     phone?: string;
-  }) => { ok: boolean; error?: string };
+  }) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => void;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
-const SESSION_KEY = "hearth.session.v1";
-const ACCOUNTS_KEY = "hearth.accounts.v1";
+
+function initialsFor(name: string): string {
+  const words = name.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "CU";
+  if (words.length >= 2) return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toUpperCase();
+  const single = words[0]!;
+  return single.length >= 2
+    ? single.slice(0, 2).toUpperCase()
+    : (single[0] ?? "C").toUpperCase().repeat(2);
+}
+
+function mapFirebaseUser(fbUser: FirebaseUser): DemoUser {
+  const displayName = fbUser.displayName?.trim();
+  const fallbackName = fbUser.email ? fbUser.email.split("@")[0]! : "Customer";
+  const name = displayName || fallbackName;
+  return {
+    uid: fbUser.uid,
+    name,
+    email: fbUser.email ?? "",
+    initials: initialsFor(name),
+    phone: fbUser.phoneNumber ?? "",
+  };
+}
+
+function authErrorMessage(code: string): string {
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "An account with this email already exists. Please sign in instead.";
+    case "auth/invalid-email":
+      return "That email address doesn't look valid.";
+    case "auth/weak-password":
+      return "Password is too weak — please use at least 6 characters.";
+    case "auth/missing-password":
+      return "Please enter your password.";
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-credential":
+    case "auth/invalid-login-credentials":
+      return "Invalid email or password. Please check your details or create an account.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Please wait a moment and try again.";
+    case "auth/network-request-failed":
+      return "Network problem — check your connection and try again.";
+    case "auth/operation-not-allowed":
+      return "Email/password sign-in is not enabled for this Firebase project yet.";
+    default:
+      return "Something went wrong. Please try again.";
+  }
+}
+
+function authErrorCode(error: unknown): string {
+  return typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : "";
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<DemoUser | null>(null);
-  const [accounts, setAccounts] = useState<StoredAccount[]>(demoAccounts);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      const rawAccounts = window.localStorage.getItem(ACCOUNTS_KEY);
-      if (rawAccounts) {
-        const parsed = JSON.parse(rawAccounts) as StoredAccount[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge custom accounts with demo accounts
-          const map = new Map<string, StoredAccount>();
-          demoAccounts.forEach((a) => map.set(a.email.toLowerCase(), a));
-          parsed.forEach((a) => map.set(a.email.toLowerCase(), a));
-          setAccounts(Array.from(map.values()));
-        }
-      }
-    } catch {
-      /* ignore */
+    const app = getFirebaseApp();
+    if (!app) {
+      setHydrated(true);
+      return;
     }
+    const auth: Auth = getAuth(app);
 
-    try {
-      const rawSession = window.localStorage.getItem(SESSION_KEY);
-      if (rawSession) setUser(JSON.parse(rawSession) as DemoUser);
-    } catch {
-      /* ignore corrupt session */
-    }
-    setHydrated(true);
+    // Keep the session alive across refreshes and browser tabs.
+    void setPersistence(auth, browserLocalPersistence).catch((err) =>
+      console.warn("[auth] could not set persistence:", err),
+    );
+
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+      if (!fbUser) {
+        setUser(null);
+        setHydrated(true);
+        return;
+      }
+
+      setUser(mapFirebaseUser(fbUser));
+      setHydrated(true);
+
+      // Phone is rarely on the auth record; fill it from the mirrored profile.
+      void rtdbGet<{ name?: string; phone?: string }>(`customers/${fbUser.uid}`).then((profile) => {
+        if (!profile) return;
+        setUser((prev) => {
+          if (!prev || prev.uid !== fbUser.uid) return prev;
+          const hasAuthName = Boolean(fbUser.displayName?.trim());
+          const name = !hasAuthName && profile.name?.trim() ? profile.name.trim() : prev.name;
+          return {
+            ...prev,
+            name,
+            initials: initialsFor(name),
+            phone: prev.phone || profile.phone?.trim() || "",
+          };
+        });
+      });
+    });
+
+    return unsubscribe;
   }, []);
 
-  const signIn = useCallback<AuthState["signIn"]>(
-    (email, password) => {
-      const cleanEmail = email.trim().toLowerCase();
-      const match = accounts.find(
-        (a) => a.email.toLowerCase() === cleanEmail && a.password === password,
-      );
-      if (!match) {
-        return {
-          ok: false,
-          error: "Invalid email or password. Please check your details or create an account.",
-        };
-      }
-      const { password: _pw, ...session } = match;
-      setUser(session);
-      window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      return { ok: true };
-    },
-    [accounts],
-  );
+  const signIn = useCallback<AuthState["signIn"]>(async (email, password) => {
+    const app = getFirebaseApp();
+    if (!app) return { ok: false, error: "Authentication is unavailable right now." };
 
-  const signUp = useCallback<AuthState["signUp"]>((input) => {
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail || !password) {
+      return { ok: false, error: "Please enter your email and password." };
+    }
+
+    try {
+      await signInWithEmailAndPassword(getAuth(app), cleanEmail, password);
+      return { ok: true };
+    } catch (error) {
+      console.warn("[auth] sign in failed:", error);
+      return { ok: false, error: authErrorMessage(authErrorCode(error)) };
+    }
+  }, []);
+
+  const signUp = useCallback<AuthState["signUp"]>(async (input) => {
     const cleanEmail = input.email.trim().toLowerCase();
     const cleanName = input.name.trim();
+    const cleanPhone = input.phone?.trim() ?? "";
 
     if (!cleanName || !cleanEmail || !input.password) {
       return { ok: false, error: "Please fill in your name, email and password." };
     }
+    if (input.password.length < 6) {
+      return { ok: false, error: "Password must be at least 6 characters long." };
+    }
 
-    // Generate unique ID and initials
-    const words = cleanName.split(/\s+/).filter(Boolean);
-    const initials =
-      words.length >= 2
-        ? `${words[0]![0]}${words[1]![0]}`.toUpperCase()
-        : cleanName.slice(0, 2).toUpperCase();
+    const app = getFirebaseApp();
+    if (!app) return { ok: false, error: "Authentication is unavailable right now." };
+    const auth = getAuth(app);
 
-    const uid = `cust_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    const phone = input.phone?.trim() || "+27 82 555 0100";
+    try {
+      // Firebase Auth rejects duplicate emails with auth/email-already-in-use.
+      const cred = await createUserWithEmailAndPassword(auth, cleanEmail, input.password);
+      await updateProfile(cred.user, { displayName: cleanName });
 
-    const newAccount: StoredAccount = {
-      uid,
-      name: cleanName,
-      email: cleanEmail,
-      password: input.password,
-      initials,
-      phone,
-      created_at: new Date().toISOString(),
-    };
+      setUser({
+        uid: cred.user.uid,
+        name: cleanName,
+        email: cleanEmail,
+        initials: initialsFor(cleanName),
+        phone: cleanPhone,
+      });
+      setHydrated(true);
 
-    setAccounts((prev) => {
-      const next = [...prev.filter((a) => a.email.toLowerCase() !== cleanEmail), newAccount];
-      try {
-        window.localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
+      // Mirror customer profile to Firebase RTDB (/customers/{uid}) per §8.1 of Integration Guide
+      void rtdbSet(`customers/${cred.user.uid}`, {
+        id: cred.user.uid,
+        name: cleanName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        created_at: new Date().toISOString(),
+      }).catch((err) => console.warn("[auth] could not mirror to firebase:", err));
 
-    const { password: _pw, ...session } = newAccount;
-    setUser(session);
-    window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-
-    // Mirror customer profile to Firebase RTDB (/customers/{uid}) per §8.1 of Integration Guide
-    void rtdbSet(`customers/${uid}`, {
-      id: uid,
-      name: cleanName,
-      email: cleanEmail,
-      phone,
-      created_at: new Date().toISOString(),
-    }).catch((err) => console.warn("[auth] could not mirror to firebase:", err));
-
-    return { ok: true };
+      return { ok: true };
+    } catch (error) {
+      console.warn("[auth] sign up failed:", error);
+      return { ok: false, error: authErrorMessage(authErrorCode(error)) };
+    }
   }, []);
 
   const signOut = useCallback(() => {
-    setUser(null);
-    window.localStorage.removeItem(SESSION_KEY);
+    const app = getFirebaseApp();
+    if (!app) return;
+    void firebaseSignOut(getAuth(app)).catch((err) => console.warn("[auth] sign out failed:", err));
   }, []);
 
   const value = useMemo<AuthState>(

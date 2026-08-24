@@ -171,7 +171,7 @@ function TrackOrder() {
     (!order?.delivery_address && (order?.delivery_fee ?? 0) === 0);
 
   const stageProgression = isPickup ? PICKUP_STAGE_PROGRESSION : DELIVERY_STAGE_PROGRESSION;
-  const customerCoordinates = deliveryAddressCoordinates(order.delivery_address);
+  const customerCoordinates = deliveryAddressCoordinates(order?.delivery_address);
   const driverLastUpdated = driverLocation?.updated_at
     ? Math.max(0, Math.round((Date.now() - new Date(driverLocation.updated_at).getTime()) / 1000))
     : null;

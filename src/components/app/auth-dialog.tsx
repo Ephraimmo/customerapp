@@ -18,6 +18,7 @@ export function AuthDialog({
 }) {
   const { signIn, signUp } = useAuth();
   const [tab, setTab] = useState<"signin" | "register">("signin");
+  const [submitting, setSubmitting] = useState(false);
 
   // Sign In state
   const [loginEmail, setLoginEmail] = useState("");
@@ -33,10 +34,13 @@ export function AuthDialog({
 
   if (!open) return null;
 
-  function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     setLoginError(null);
-    const res = signIn(loginEmail, loginPassword);
+    setSubmitting(true);
+    const res = await signIn(loginEmail, loginPassword);
+    setSubmitting(false);
     if (!res.ok) {
       setLoginError(res.error || "Sign in failed.");
       return;
@@ -46,15 +50,18 @@ export function AuthDialog({
     if (onSuccess) onSuccess();
   }
 
-  function handleRegister(e: React.FormEvent) {
+  async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
+    if (submitting) return;
     setRegisterError(null);
-    const res = signUp({
+    setSubmitting(true);
+    const res = await signUp({
       name: registerName,
       email: registerEmail,
       phone: registerPhone,
       password: registerPassword,
     });
+    setSubmitting(false);
     if (!res.ok) {
       setRegisterError(res.error || "Registration failed.");
       return;
@@ -152,18 +159,16 @@ export function AuthDialog({
               />
             </div>
 
-            {loginError ? (
-              <p className="text-xs text-destructive font-bold">{loginError}</p>
-            ) : null}
+            {loginError ? <p className="text-xs text-destructive font-bold">{loginError}</p> : null}
 
             <button
               type="submit"
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-wider text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer flex items-center justify-center gap-2"
+              disabled={submitting}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-wider text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <LogIn className="size-4" />
-              <span>Sign In & Continue</span>
+              <span>{submitting ? "Signing in…" : "Sign In & Continue"}</span>
             </button>
-
           </form>
         ) : (
           /* Register Form */
@@ -230,10 +235,11 @@ export function AuthDialog({
 
             <button
               type="submit"
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-wider text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer flex items-center justify-center gap-2"
+              disabled={submitting}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground font-black uppercase tracking-wider text-xs shadow-md hover:bg-primary/90 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <UserPlus className="size-4" />
-              <span>Create Account & Continue</span>
+              <span>{submitting ? "Creating account…" : "Create Account & Continue"}</span>
             </button>
           </form>
         )}
