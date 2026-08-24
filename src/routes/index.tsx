@@ -213,7 +213,7 @@ function Discover() {
             </span>
             <span className="flex items-center gap-1.5 text-sm font-bold text-foreground group-hover:text-primary transition-colors">
               <MapPin className="size-3.5 text-primary shrink-0" aria-hidden />
-              <span className="max-w-[52vw] truncate sm:max-w-[220px]">
+              <span className="truncate max-w-[200px]">
                 {activeLocation
                   ? `${activeLocation.label} • ${activeLocation.street}`
                   : "Set Delivery Location"}
@@ -280,372 +280,355 @@ function Discover() {
 
           {/* Interactive Dropdown Filter Panel (with Explore Cuisines directly inside) */}
           {showFilterDropdown && (
-            <>
-              {/* Dimmed tap-to-close backdrop behind the mobile bottom sheet */}
-              <button
-                type="button"
-                aria-label="Close filters"
-                onClick={() => setShowFilterDropdown(false)}
-                className="fixed inset-0 z-[55] cursor-default bg-background/70 backdrop-blur-sm md:hidden"
-              />
-
-              {/* Bottom sheet on mobile, inline dropdown panel on desktop */}
-              <div className="fixed inset-x-0 bottom-0 z-60 max-h-[88dvh] space-y-5 overflow-y-auto overscroll-contain rounded-t-[28px] border-t border-border bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl animate-[var(--animate-sheet-up)] md:static md:z-auto md:max-h-[85vh] md:rounded-3xl md:border md:p-5 md:pb-5">
-                <div
-                  className="mx-auto h-1.5 w-10 shrink-0 rounded-full bg-border md:hidden"
-                  aria-hidden
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-3 sticky top-0 bg-card/95 backdrop-blur-sm z-10 -mt-1 pt-1">
-                  <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="size-4 text-primary" />
-                    <span className="text-sm font-black text-foreground">
-                      Filter by Cuisine & Preferences
-                    </span>
-                    {activeFilterCount > 0 ? (
-                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-black text-primary border border-primary/20">
-                        {activeFilterCount} active
-                      </span>
-                    ) : null}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {activeFilterCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={handleResetFilters}
-                        className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
-                      >
-                        <RotateCcw className="size-3" />
-                        Reset
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setShowFilterDropdown(false)}
-                      aria-label="Close filters"
-                      className="grid size-7 place-items-center rounded-full bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-
-                {/* 1. Explore Cuisines / Categories */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="label-mono text-[11px] text-muted-foreground block font-bold">
-                      Explore Cuisines & Food Types
-                    </span>
-                    {selectedCategory ? (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCategory(null)}
-                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                      >
-                        Clear cuisine
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedCategory(null)}
-                      className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                        selectedCategory === null
-                          ? "bg-foreground text-background border-foreground shadow-sm"
-                          : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                      }`}
-                    >
-                      🔥 All Food
-                    </button>
-
-                    {categories.map((cat) => {
-                      const isSelected = selectedCategory === cat.label;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => setSelectedCategory(isSelected ? null : cat.label)}
-                          className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                            isSelected
-                              ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                              : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                          }`}
-                        >
-                          {cat.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 2. Sort By */}
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="label-mono text-[11px] text-muted-foreground block font-bold">
-                      Sort Kitchens By
-                    </span>
-                    {filters.sortBy !== "distance" ? (
-                      <button
-                        type="button"
-                        onClick={() => setFilters((f) => ({ ...f, sortBy: "distance" }))}
-                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                      >
-                        Reset sort
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { id: "distance", label: "📍 Closest First" },
-                      { id: "rating", label: "⭐ Highest Rated (4.8+)" },
-                      { id: "fastest", label: "⚡ Fastest Arrival (≤20 min)" },
-                      { id: "fee", label: "🛵 Lowest Delivery Fee" },
-                    ].map((opt) => {
-                      const isSelected = filters.sortBy === opt.id;
-                      const isDefault = opt.id === "distance";
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() =>
-                            setFilters((f) => ({ ...f, sortBy: opt.id as SortOption }))
-                          }
-                          className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                            isSelected
-                              ? isDefault
-                                ? "bg-foreground text-background border-foreground shadow-sm"
-                                : "bg-primary text-primary-foreground border-primary shadow-sm"
-                              : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 3. Price Range */}
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="label-mono text-[11px] text-muted-foreground block font-bold">
-                      Price Range
-                    </span>
-                    {filters.priceBand !== "all" ? (
-                      <button
-                        type="button"
-                        onClick={() => setFilters((f) => ({ ...f, priceBand: "all" }))}
-                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                      >
-                        Clear price
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { id: "all", label: "🏷️ All Prices" },
-                      { id: "R", label: "R • Budget (Under R100)" },
-                      { id: "RR", label: "RR • Mid-Range (R100–R250)" },
-                      { id: "RRR", label: "RRR • Gourmet (R250+)" },
-                    ].map((p) => {
-                      const isSelected = filters.priceBand === p.id;
-                      const isDefault = p.id === "all";
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() =>
-                            setFilters((f) => ({ ...f, priceBand: p.id as PriceOption }))
-                          }
-                          className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                            isSelected
-                              ? isDefault
-                                ? "bg-foreground text-background border-foreground shadow-sm"
-                                : "bg-primary text-primary-foreground border-primary shadow-sm"
-                              : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                          }`}
-                        >
-                          {p.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 4. Max Delivery Time */}
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="label-mono text-[11px] text-muted-foreground block font-bold">
-                      Max Delivery Time
-                    </span>
-                    {filters.maxEtaMinutes !== null ? (
-                      <button
-                        type="button"
-                        onClick={() => setFilters((f) => ({ ...f, maxEtaMinutes: null }))}
-                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                      >
-                        Clear time
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { val: null, label: "⏱️ Any Time" },
-                      { val: 20, label: "⚡ ≤ 20 min" },
-                      { val: 25, label: "⚡ ≤ 25 min" },
-                      { val: 35, label: "⏱️ ≤ 35 min" },
-                      { val: 45, label: "🕒 ≤ 45 min" },
-                    ].map((t) => {
-                      const isSelected = filters.maxEtaMinutes === t.val;
-                      const isDefault = t.val === null;
-                      return (
-                        <button
-                          key={String(t.val)}
-                          type="button"
-                          onClick={() => setFilters((f) => ({ ...f, maxEtaMinutes: t.val }))}
-                          className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                            isSelected
-                              ? isDefault
-                                ? "bg-foreground text-background border-foreground shadow-sm"
-                                : "bg-primary text-primary-foreground border-primary shadow-sm"
-                              : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                          }`}
-                        >
-                          {t.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 6. Delivery Fee Cap */}
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="label-mono text-[11px] text-muted-foreground block font-bold">
-                      Delivery Fee Cap
-                    </span>
-                    {filters.maxDeliveryFee !== null ? (
-                      <button
-                        type="button"
-                        onClick={() => setFilters((prev) => ({ ...prev, maxDeliveryFee: null }))}
-                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                      >
-                        Clear fee
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { val: null, label: "🛵 Any Fee" },
-                      { val: 0, label: "🎉 Free Delivery (R 0)" },
-                      { val: 15, label: "🏷️ ≤ R 15" },
-                      { val: 25, label: "💰 ≤ R 25" },
-                      { val: 35, label: "🪙 ≤ R 35" },
-                    ].map((f) => {
-                      const isSelected = filters.maxDeliveryFee === f.val;
-                      const isDefault = f.val === null;
-                      return (
-                        <button
-                          key={String(f.val)}
-                          type="button"
-                          onClick={() => setFilters((prev) => ({ ...prev, maxDeliveryFee: f.val }))}
-                          className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                            isSelected
-                              ? isDefault
-                                ? "bg-foreground text-background border-foreground shadow-sm"
-                                : "bg-primary text-primary-foreground border-primary shadow-sm"
-                              : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                          }`}
-                        >
-                          {f.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 7. Special Offers & Deals */}
-                <div className="space-y-2 border-t border-border/60 pt-3">
-                  <div className="flex items-center justify-between">
-                    <span className="label-mono text-[11px] text-muted-foreground block font-bold">
-                      Special Offers & Deals
-                    </span>
-                    {filters.onlyTopRated || filters.onlyWithDeals ? (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFilters((f) => ({ ...f, onlyTopRated: false, onlyWithDeals: false }))
-                        }
-                        className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
-                      >
-                        Clear offers
-                      </button>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setFilters((f) => ({ ...f, onlyTopRated: !f.onlyTopRated }))}
-                      className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                        filters.onlyTopRated
-                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                          : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                      }`}
-                    >
-                      <Star className="size-3.5 fill-current" />
-                      <span>4.8+ Stars Rating Only</span>
-                      {filters.onlyTopRated ? <Check className="size-3.5 ml-1" /> : null}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFilters((f) => ({ ...f, onlyWithDeals: !f.onlyWithDeals }))}
-                      className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
-                        filters.onlyWithDeals
-                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                          : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
-                      }`}
-                    >
-                      <Sparkles className="size-3.5" />
-                      <span>Has Active Deals & Combos</span>
-                      {filters.onlyWithDeals ? <Check className="size-3.5 ml-1" /> : null}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="sticky bottom-0 z-10 -mb-1 flex flex-wrap items-center justify-between gap-2 border-t border-border/80 bg-card/95 pt-3 pb-1 backdrop-blur-sm">
-                  <span className="text-xs font-mono font-bold text-muted-foreground">
-                    {filteredRestaurants.length}{" "}
-                    {filteredRestaurants.length === 1 ? "kitchen" : "kitchens"} matching
+            <div className="rounded-3xl bg-card p-5 border border-border shadow-2xl space-y-5 animate-[var(--animate-sheet-up)] max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-border/80 pb-3 sticky top-0 bg-card/95 backdrop-blur-sm z-10 -mt-1 pt-1">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="size-4 text-primary" />
+                  <span className="text-sm font-black text-foreground">
+                    Filter by Cuisine & Preferences
                   </span>
+                  {activeFilterCount > 0 ? (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-black text-primary border border-primary/20">
+                      {activeFilterCount} active
+                    </span>
+                  ) : null}
+                </div>
 
-                  <div className="flex flex-1 items-center justify-end gap-2 sm:flex-none">
+                <div className="flex items-center gap-2">
+                  {activeFilterCount > 0 ? (
                     <button
                       type="button"
                       onClick={handleResetFilters}
-                      className="rounded-xl px-3 py-2.5 text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+                      className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
                     >
-                      Clear All
+                      <RotateCcw className="size-3" />
+                      Reset
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowFilterDropdown(false)}
-                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-xs font-black uppercase tracking-wider text-primary-foreground shadow-md hover:bg-primary/90 transition-all cursor-pointer sm:flex-none"
-                    >
-                      Show {filteredRestaurants.length} Results
-                    </button>
-                  </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => setShowFilterDropdown(false)}
+                    aria-label="Close filters"
+                    className="grid size-7 place-items-center rounded-full bg-secondary text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+                  >
+                    <X className="size-3.5" />
+                  </button>
                 </div>
               </div>
-            </>
+
+              {/* 1. Explore Cuisines / Categories */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="label-mono text-[11px] text-muted-foreground block font-bold">
+                    Explore Cuisines & Food Types
+                  </span>
+                  {selectedCategory ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory(null)}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Clear cuisine
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(null)}
+                    className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                      selectedCategory === null
+                        ? "bg-foreground text-background border-foreground shadow-sm"
+                        : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    🔥 All Food
+                  </button>
+
+                  {categories.map((cat) => {
+                    const isSelected = selectedCategory === cat.label;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedCategory(isSelected ? null : cat.label)}
+                        className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Sort By */}
+              <div className="space-y-2 border-t border-border/60 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="label-mono text-[11px] text-muted-foreground block font-bold">
+                    Sort Kitchens By
+                  </span>
+                  {filters.sortBy !== "distance" ? (
+                    <button
+                      type="button"
+                      onClick={() => setFilters((f) => ({ ...f, sortBy: "distance" }))}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Reset sort
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: "distance", label: "📍 Closest First" },
+                    { id: "rating", label: "⭐ Highest Rated (4.8+)" },
+                    { id: "fastest", label: "⚡ Fastest Arrival (≤20 min)" },
+                    { id: "fee", label: "🛵 Lowest Delivery Fee" },
+                  ].map((opt) => {
+                    const isSelected = filters.sortBy === opt.id;
+                    const isDefault = opt.id === "distance";
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setFilters((f) => ({ ...f, sortBy: opt.id as SortOption }))}
+                        className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                          isSelected
+                            ? isDefault
+                              ? "bg-foreground text-background border-foreground shadow-sm"
+                              : "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. Price Range */}
+              <div className="space-y-2 border-t border-border/60 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="label-mono text-[11px] text-muted-foreground block font-bold">
+                    Price Range
+                  </span>
+                  {filters.priceBand !== "all" ? (
+                    <button
+                      type="button"
+                      onClick={() => setFilters((f) => ({ ...f, priceBand: "all" }))}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Clear price
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { id: "all", label: "🏷️ All Prices" },
+                    { id: "R", label: "R • Budget (Under R100)" },
+                    { id: "RR", label: "RR • Mid-Range (R100–R250)" },
+                    { id: "RRR", label: "RRR • Gourmet (R250+)" },
+                  ].map((p) => {
+                    const isSelected = filters.priceBand === p.id;
+                    const isDefault = p.id === "all";
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() =>
+                          setFilters((f) => ({ ...f, priceBand: p.id as PriceOption }))
+                        }
+                        className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                          isSelected
+                            ? isDefault
+                              ? "bg-foreground text-background border-foreground shadow-sm"
+                              : "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 4. Max Delivery Time */}
+              <div className="space-y-2 border-t border-border/60 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="label-mono text-[11px] text-muted-foreground block font-bold">
+                    Max Delivery Time
+                  </span>
+                  {filters.maxEtaMinutes !== null ? (
+                    <button
+                      type="button"
+                      onClick={() => setFilters((f) => ({ ...f, maxEtaMinutes: null }))}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Clear time
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { val: null, label: "⏱️ Any Time" },
+                    { val: 20, label: "⚡ ≤ 20 min" },
+                    { val: 25, label: "⚡ ≤ 25 min" },
+                    { val: 35, label: "⏱️ ≤ 35 min" },
+                    { val: 45, label: "🕒 ≤ 45 min" },
+                  ].map((t) => {
+                    const isSelected = filters.maxEtaMinutes === t.val;
+                    const isDefault = t.val === null;
+                    return (
+                      <button
+                        key={String(t.val)}
+                        type="button"
+                        onClick={() => setFilters((f) => ({ ...f, maxEtaMinutes: t.val }))}
+                        className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                          isSelected
+                            ? isDefault
+                              ? "bg-foreground text-background border-foreground shadow-sm"
+                              : "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 6. Delivery Fee Cap */}
+              <div className="space-y-2 border-t border-border/60 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="label-mono text-[11px] text-muted-foreground block font-bold">
+                    Delivery Fee Cap
+                  </span>
+                  {filters.maxDeliveryFee !== null ? (
+                    <button
+                      type="button"
+                      onClick={() => setFilters((prev) => ({ ...prev, maxDeliveryFee: null }))}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Clear fee
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { val: null, label: "🛵 Any Fee" },
+                    { val: 0, label: "🎉 Free Delivery (R 0)" },
+                    { val: 15, label: "🏷️ ≤ R 15" },
+                    { val: 25, label: "💰 ≤ R 25" },
+                    { val: 35, label: "🪙 ≤ R 35" },
+                  ].map((f) => {
+                    const isSelected = filters.maxDeliveryFee === f.val;
+                    const isDefault = f.val === null;
+                    return (
+                      <button
+                        key={String(f.val)}
+                        type="button"
+                        onClick={() => setFilters((prev) => ({ ...prev, maxDeliveryFee: f.val }))}
+                        className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                          isSelected
+                            ? isDefault
+                              ? "bg-foreground text-background border-foreground shadow-sm"
+                              : "bg-primary text-primary-foreground border-primary shadow-sm"
+                            : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 7. Special Offers & Deals */}
+              <div className="space-y-2 border-t border-border/60 pt-3">
+                <div className="flex items-center justify-between">
+                  <span className="label-mono text-[11px] text-muted-foreground block font-bold">
+                    Special Offers & Deals
+                  </span>
+                  {filters.onlyTopRated || filters.onlyWithDeals ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFilters((f) => ({ ...f, onlyTopRated: false, onlyWithDeals: false }))
+                      }
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Clear offers
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setFilters((f) => ({ ...f, onlyTopRated: !f.onlyTopRated }))}
+                    className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                      filters.onlyTopRated
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <Star className="size-3.5 fill-current" />
+                    <span>4.8+ Stars Rating Only</span>
+                    {filters.onlyTopRated ? <Check className="size-3.5 ml-1" /> : null}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFilters((f) => ({ ...f, onlyWithDeals: !f.onlyWithDeals }))}
+                    className={`h-9 px-3.5 rounded-xl text-xs font-bold transition-all border cursor-pointer inline-flex items-center gap-1.5 ${
+                      filters.onlyWithDeals
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-secondary/60 text-foreground border-border hover:bg-secondary"
+                    }`}
+                  >
+                    <Sparkles className="size-3.5" />
+                    <span>Has Active Deals & Combos</span>
+                    {filters.onlyWithDeals ? <Check className="size-3.5 ml-1" /> : null}
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between border-t border-border/80 pt-3 sticky bottom-0 bg-card/95 backdrop-blur-sm z-10 -mb-1 pb-1">
+                <span className="text-xs font-mono font-bold text-muted-foreground">
+                  {filteredRestaurants.length}{" "}
+                  {filteredRestaurants.length === 1 ? "kitchen" : "kitchens"} matching
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleResetFilters}
+                    className="rounded-xl px-3 py-2 text-xs font-bold text-muted-foreground hover:text-foreground cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowFilterDropdown(false)}
+                    className="rounded-xl bg-primary px-5 py-2 text-xs font-black uppercase tracking-wider text-primary-foreground shadow-md hover:bg-primary/90 transition-all cursor-pointer"
+                  >
+                    Show {filteredRestaurants.length} Results
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </header>
@@ -862,7 +845,7 @@ function Discover() {
 
           {/* Restaurant Grid */}
           {filteredRestaurants.length === 0 ? (
-            <div className="rounded-3xl bg-secondary p-8 sm:p-12 text-center border border-border space-y-3">
+            <div className="rounded-3xl bg-secondary p-12 text-center border border-border space-y-3">
               <p className="text-lg font-black text-foreground">
                 {loading ? "Loading kitchens…" : "No kitchens matched your filters"}
               </p>
@@ -896,7 +879,7 @@ function Discover() {
         </section>
 
         {/* Why Hearth / Value Props Strip */}
-        <section className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 border-t border-border pt-8 text-xs">
+        <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-border pt-8 text-xs">
           <div className="rounded-2xl bg-secondary/60 p-4 border border-border/80 space-y-1">
             <div className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary">
               <Clock className="size-4" />

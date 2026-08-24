@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
@@ -95,7 +95,6 @@ const PICKUP_STAGE_PROGRESSION: Array<{
 function TrackOrder() {
   const { orderId } = Route.useParams();
   const navigate = useNavigate();
-  const router = useRouter();
 
   const pointsConfig = usePointsConfig();
   const pointsOverrides = useRestaurantPointsOverrides();
@@ -273,20 +272,13 @@ function TrackOrder() {
     <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-2xl">
       <header className="sticky top-0 z-40 md:static flex items-center justify-between border-b border-border bg-background/90 px-4 py-4 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              if (router.history.canGoBack()) {
-                router.history.back();
-              } else {
-                void navigate({ to: "/orders" });
-              }
-            }}
+          <Link
+            to="/orders"
             aria-label="Back to orders"
-            className="grid size-11 place-items-center rounded-full bg-secondary ring-1 ring-border hover:bg-secondary/80 transition-colors cursor-pointer"
+            className="grid size-11 place-items-center rounded-full bg-secondary ring-1 ring-border"
           >
             <ArrowLeft className="size-4" aria-hidden />
-          </button>
+          </Link>
           <div>
             <h1 className="text-lg leading-none font-black tracking-tight">
               {order.restaurant_name}
@@ -350,21 +342,13 @@ function TrackOrder() {
           ) : (
             <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 p-6 text-center">
               <MapPin className="size-6 text-muted-foreground" />
-              <p className="text-sm font-bold">
-                {isPickup ? `Pickup at ${order.restaurant_name}` : "Delivery location pending"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                The map will appear when coordinates are available.
-              </p>
+              <p className="text-sm font-bold">{isPickup ? `Pickup at ${order.restaurant_name}` : "Delivery location pending"}</p>
+              <p className="text-xs text-muted-foreground">The map will appear when coordinates are available.</p>
             </div>
           )}
           {!isPickup && order.driver_id ? (
             <span className="absolute bottom-4 left-4 rounded-full bg-background/90 px-3 py-1.5 text-xs font-bold ring-1 ring-border backdrop-blur">
-              {driverIsStale
-                ? "Driver location temporarily unavailable"
-                : driverLastUpdated === 0
-                  ? "Live"
-                  : `Last updated ${driverLastUpdated}s ago`}
+              {driverIsStale ? "Driver location temporarily unavailable" : driverLastUpdated === 0 ? "Live" : `Last updated ${driverLastUpdated}s ago`}
             </span>
           ) : null}
         </div>

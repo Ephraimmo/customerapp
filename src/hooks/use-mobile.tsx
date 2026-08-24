@@ -10,20 +10,9 @@ export function useIsMobile() {
     const onChange = () => {
       setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
     };
-    // Older mobile Safari (<14) only exposes the legacy addListener API.
-    if (typeof mql.addEventListener === "function") {
-      mql.addEventListener("change", onChange);
-    } else if (typeof mql.addListener === "function") {
-      mql.addListener(onChange);
-    }
+    mql.addEventListener("change", onChange);
     setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
-    return () => {
-      if (typeof mql.removeEventListener === "function") {
-        mql.removeEventListener("change", onChange);
-      } else if (typeof mql.removeListener === "function") {
-        mql.removeListener(onChange);
-      }
-    };
+    return () => mql.removeEventListener("change", onChange);
   }, []);
 
   return !!isMobile;
