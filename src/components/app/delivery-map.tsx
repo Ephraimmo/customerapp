@@ -30,7 +30,7 @@ const GOOGLE_MAPS_API_KEY = import.meta.env["VITE_GOOGLE_MAPS_API_KEY"] as strin
 const GOOGLE_MAPS_SCRIPT_ID = "hearth-google-maps-script";
 let mapsLoader: Promise<GoogleMapsNamespace> | null = null;
 
-function loadGoogleMaps() {
+export function loadGoogleMaps() {
   if (typeof window === "undefined") return Promise.reject(new Error("Maps require a browser"));
   const existing = (window as GoogleWindow).google;
   if (existing) return Promise.resolve(existing);
@@ -45,7 +45,11 @@ function loadGoogleMaps() {
     if (current) {
       current.addEventListener("load", () => {
         const google = (window as GoogleWindow).google;
-        google ? resolve(google) : reject(new Error("Google Maps did not initialize"));
+        if (google) {
+          resolve(google);
+        } else {
+          reject(new Error("Google Maps did not initialize"));
+        }
       });
       current.addEventListener("error", () => reject(new Error("Google Maps failed to load")));
       return;
@@ -170,7 +174,9 @@ export function DeliveryMap({
       <div className="flex h-full min-h-56 flex-col items-center justify-center gap-2 bg-secondary p-6 text-center">
         <MapPin className="size-6 text-muted-foreground" />
         <p className="text-sm font-bold">Map temporarily unavailable.</p>
-        <p className="text-xs text-muted-foreground">Your delivery status is still updating live.</p>
+        <p className="text-xs text-muted-foreground">
+          Your delivery status is still updating live.
+        </p>
       </div>
     );
   }

@@ -143,7 +143,16 @@ function geolocationErrorMessage(error: GeolocationPositionError) {
   }
 }
 
-async function reverseGeocodeCoordinates(coords: GpsCoordinates) {
+export interface ReverseGeocodeResult {
+  street: string;
+  city: string;
+  postal_code: string;
+}
+
+export async function reverseGeocodeCoordinates(coords: {
+  latitude: number;
+  longitude: number;
+}): Promise<ReverseGeocodeResult | null> {
   if (!GOOGLE_MAPS_API_KEY) return null;
 
   const params = new URLSearchParams({
@@ -170,9 +179,7 @@ async function reverseGeocodeCoordinates(coords: GpsCoordinates) {
   return {
     street: street || result.formatted_address || `${coords.latitude}, ${coords.longitude}`,
     city:
-      component("locality") ||
-      component("postal_town") ||
-      component("administrative_area_level_2"),
+      component("locality") || component("postal_town") || component("administrative_area_level_2"),
     postal_code: component("postal_code"),
   };
 }
@@ -185,7 +192,8 @@ function locationFromCoordinates(
   return {
     id,
     label: "Current GPS Position",
-    street: address?.street || `GPS Fix (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`,
+    street:
+      address?.street || `GPS Fix (${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)})`,
     city: address?.city || "",
     postal_code: address?.postal_code || "",
     latitude: coords.latitude,
@@ -313,7 +321,8 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       }
 
       if (!window.isSecureContext && window.location.hostname !== "localhost") {
-        const message = "Location access requires a secure HTTPS connection. Please reopen this website using HTTPS and try again.";
+        const message =
+          "Location access requires a secure HTTPS connection. Please reopen this website using HTTPS and try again.";
         setGpsStatus("error");
         setGpsError(message);
         toast.error("Secure connection required", { description: message });

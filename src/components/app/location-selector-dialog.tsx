@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Briefcase,
   Building,
@@ -6,6 +6,7 @@ import {
   Compass,
   Crosshair,
   Home,
+  Map,
   MapPin,
   Plus,
   Sparkles,
@@ -14,6 +15,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { SOUTH_AFRICAN_PRESETS, useLocation, type CityPreset } from "@/lib/location";
+import {
+  MapLocationPicker,
+  type PickedLocationDetails,
+} from "@/components/app/map-location-picker";
 
 const LABEL_SUGGESTIONS = [
   { label: "Home", icon: Home },
@@ -34,6 +39,11 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
   } = useLocation();
 
   const [isAdding, setIsAdding] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [initialPickerCoords, setInitialPickerCoords] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
   const [label, setLabel] = useState("Home");
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("Johannesburg");
@@ -45,7 +55,48 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
   const [detectingGps, setDetectingGps] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Reset the map picker view when the dialog closes so it reopens in its previous context.
+  useEffect(() => {
+    if (!open) setShowMapPicker(false);
+  }, [open]);
+
   if (!open) return null;
+
+  // Save the final map-selected coordinates through the existing location service so
+  // checkout, delivery quotes and order creation all use them as the active location.
+  async function handleConfirmMapLocation(details: PickedLocationDetails) {
+    try {
+      await saveLocationToFirebase({
+        label: "Pinned Location",
+        street:
+          details.street?.trim() ||
+          `Exact location selected (${details.latitude.toFixed(6)}, ${details.longitude.toFixed(6)})`,
+        city: details.city?.trim() || "",
+        postal_code: details.postal_code?.trim() || "",
+        latitude: details.latitude,
+        longitude: details.longitude,
+        notes: details.description,
+        is_default: false,
+        source: "manual",
+      });
+      setShowMapPicker(false);
+      onClose();
+      toast.success("Delivery location confirmed", {
+        description: `${details.latitude.toFixed(6)}, ${details.longitude.toFixed(6)}`,
+      });
+    } catch {
+      toast.error("Could not save the selected location. Please try again.");
+    }
+  }
+
+  // Open the map centred on any coordinates already typed into the manual form.
+  function openMapPickerFromForm() {
+    const lat = Number.parseFloat(latitude);
+    const lng = Number.parseFloat(longitude);
+    const hasFormCoords = !Number.isNaN(lat) && !Number.isNaN(lng);
+    setInitialPickerCoords(hasFormCoords ? { latitude: lat, longitude: lng } : null);
+    setShowMapPicker(true);
+  }
 
   // Current location fills only latitude and longitude, leaving the other fields editable.
   async function handleLiveGps() {
@@ -130,33 +181,48 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black tracking-tight text-foreground">
-                {showList ? "Delivery Addresses" : "Add Delivery Address"}
+                {showMapPicker
+                  ? "Choose Location on Map"
+                  : showList
+                    ? "Delivery Addresses"
+                    : "Add Delivery Address"}
               </h2>
               <p className="text-[11px] sm:text-xs text-muted-foreground">
-                {showList
-                  ? `Saved in Firebase Database (${locations.length})`
-                  : "Manual details • Use current location for coordinates"}
+                {showMapPicker
+                  ? "Drag the map under the pin • works without a street address"
+                  : showList
+                    ? `Saved in Firebase Database (${locations.length})`
+                    : "Manual details • Use current location for coordinates"}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={() => {
-              if (isAdding && locations.length > 0) {
+              if (showMapPicker) {
+                setShowMapPicker(false);
+              } else if (isAdding && locations.length > 0) {
                 setIsAdding(false);
               } else {
                 onClose();
               }
             }}
-            aria-label="Close"
+            aria-label={showMapPicker ? "Back" : "Close"}
             className="grid size-9 place-items-center rounded-full bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80 ring-1 ring-border cursor-pointer transition-colors"
           >
             <X className="size-4" />
           </button>
         </div>
 
-        {/* VIEW 1: Saved Locations List */}
-        {showList ? (
+        {/* VIEW 3: Interactive Map Picker (fixed centre pin) */}
+        {showMapPicker ? (
+          <MapLocationPicker
+            initialLatitude={initialPickerCoords?.latitude ?? null}
+            initialLongitude={initialPickerCoords?.longitude ?? null}
+            onBack={() => setShowMapPicker(false)}
+            onConfirm={handleConfirmMapLocation}
+          />
+        ) : showList ? (
           <>
             <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-3 overscroll-contain">
               {locations.map((loc) => {
@@ -231,7 +297,18 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
             </div>
 
             {/* Sticky Action Footer */}
-            <div className="border-t border-border bg-card p-4 sm:p-5 shrink-0">
+            <div className="border-t border-border bg-card p-4 sm:p-5 space-y-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setInitialPickerCoords(null);
+                  setShowMapPicker(true);
+                }}
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-xs font-black tracking-wider uppercase text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 cursor-pointer transition-all active:scale-[0.98]"
+              >
+                <Map className="size-4" />
+                Choose Location on Map
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -240,10 +317,10 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                   setNotes("");
                   setIsAdding(true);
                 }}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-xs font-black tracking-wider uppercase text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90 cursor-pointer transition-all active:scale-[0.98]"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-secondary text-xs font-bold text-foreground border border-border hover:bg-secondary/80 transition-colors cursor-pointer"
               >
                 <Plus className="size-4" />
-                Add New Delivery Location
+                Enter Address Manually
               </button>
             </div>
           </>
@@ -348,7 +425,11 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                       Open the lock/site-settings icon next to the website address, allow Location,
                       reload the page, then try again.
                     </p>
-                    <button type="button" onClick={handleLiveGps} className="mt-2 font-bold underline">
+                    <button
+                      type="button"
+                      onClick={handleLiveGps}
+                      className="mt-2 font-bold underline"
+                    >
                       Try again
                     </button>
                   </div>
@@ -406,6 +487,16 @@ export function LocationSelectorDialog({ open, onClose }: { open: boolean; onClo
                     />
                   </div>
                 </div>
+
+                {/* Choose on map with the fixed centre pin */}
+                <button
+                  type="button"
+                  onClick={openMapPickerFromForm}
+                  className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-background text-xs font-bold border border-primary/30 text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                >
+                  <Map className="size-3.5" />
+                  Pick exact spot on map (drag map under pin)
+                </button>
 
                 {/* Quick SA Presets */}
                 <div>
