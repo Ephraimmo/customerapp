@@ -49,7 +49,7 @@ import {
   usePromoCampaigns,
   useRestaurantPointsOverrides,
 } from "./firebase-adapters";
-import { get, getDb, ref, rtdbSet, rtdbSubscribe, set } from "./firebase";
+import { rtdbGet, rtdbSet, rtdbSubscribe } from "./firebase";
 
 export type CartLine = {
   lineId: string;
@@ -342,15 +342,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
       setSyncing(false);
       return;
     }
-    const db = getDb();
-    if (!db) return;
     let cancelled = false;
     setSyncing(true);
-    void get(ref(db, cartPath(user.uid)))
-      .then((snap) => {
+    void rtdbGet<(Omit<StoredCart, "lines"> & { lines?: unknown }) | null>(cartPath(user.uid))
+      .then((savedRaw) => {
         if (cancelled) return;
-        const savedRaw = (snap.val() ?? null) as
-          (Omit<StoredCart, "lines"> & { lines?: unknown }) | null;
         const saved = savedRaw ? { ...savedRaw, lines: normalizeLines(savedRaw.lines) } : null;
         setLines((current) => {
           if (current.length > 0) return current;
@@ -392,13 +388,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(PLACED_ORDERS_KEY, JSON.stringify(placedOrderIds));
   }, [placedOrderIds, hydrated]);
 
-  // Mirror cart to user's Firebase cart node when signed in
+  // Mirror cart to user's Firebase cart document when signed in
   useEffect(() => {
     if (!user || !cloudReady) return;
-    const db = getDb();
-    if (!db) return;
     const timer = window.setTimeout(() => {
-      void set(ref(db, cartPath(user.uid)), {
+      void rtdbSet(cartPath(user.uid), {
         lines,
         tip,
         couponCode,

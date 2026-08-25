@@ -1,5 +1,5 @@
-import { rtdbGet, rtdbSet, rtdbUpdate, getDb, ref, get, set } from "./firebase";
-import { runTransaction } from "firebase/database";
+import { rtdbGet, rtdbSet, rtdbUpdate, getDb } from "./firebase";
+import { doc, runTransaction } from "firebase/firestore";
 
 /* -------------------------------------------------------------------------- */
 /*  1. Promotion & Loyalty Data Contracts                                      */
@@ -193,7 +193,8 @@ export function resolveEffectivePointsConfig(
 export function findRestaurantPointsOverride(
   overrides: Record<string, RestaurantPointsOverride> | null | undefined,
   restaurantId: string | null | undefined,
-  restaurant?: { id?: string | null; slug?: string | null; name?: string | null } | null | undefined,
+  restaurant?:
+    { id?: string | null; slug?: string | null; name?: string | null } | null | undefined,
 ): RestaurantPointsOverride | null {
   if (!overrides || !restaurantId) return null;
   if (overrides[restaurantId]) return overrides[restaurantId] ?? null;
@@ -386,7 +387,8 @@ export function validateAndPriceCoupon(
     deliveryFee: number;
     cheapestItemUnit: number; // cheapest cart item unit price (for bogo)
     restaurantId: string;
-    restaurant?: { id?: string | null; slug?: string | null; name?: string | null } | null | undefined;
+    restaurant?:
+      { id?: string | null; slug?: string | null; name?: string | null } | null | undefined;
     isFirstOrder: boolean;
   },
 ): CouponResult {
@@ -467,9 +469,9 @@ export async function getCustomerWallet(customerId: string): Promise<LoyaltyWall
     };
   }
   try {
-    const snap = await get(ref(db, `loyalty/wallets/${customerId}`));
-    if (snap.exists()) {
-      return snap.val() as LoyaltyWallet;
+    const snap = await rtdbGet<LoyaltyWallet>(`loyalty/wallets/${customerId}`);
+    if (snap) {
+      return snap;
     }
     const initial: LoyaltyWallet = {
       balance: 0,
@@ -477,7 +479,7 @@ export async function getCustomerWallet(customerId: string): Promise<LoyaltyWall
       lifetime_redeemed: 0,
       updated_at: new Date().toISOString(),
     };
-    await set(ref(db, `loyalty/wallets/${customerId}`), initial);
+    await rtdbSet(`loyalty/wallets/${customerId}`, initial);
     return initial;
   } catch {
     return {
@@ -505,34 +507,38 @@ export async function creditLoyaltyPoints(
   inFlightCredits.add(lockKey);
 
   try {
-    const idempotencyRef = ref(db, `loyalty/earned_orders/${customerId}/${orderId}`);
-    const idempSnap = await get(idempotencyRef);
-    if (idempSnap.exists() && idempSnap.val() === true) {
-      return; // Already credited
-    }
+    // Idempotency flag + wallet increment commit atomically (Firestore transaction)
+    const walletRef = doc(db, "loyalty_wallets", customerId);
+    const idempotencyRef = doc(db, "loyalty_earned_orders", `${customerId}__${orderId}`);
 
-    // Set idempotency key immediately to block concurrent duplicate writes
-    await set(idempotencyRef, true);
-
-    const walletRef = ref(db, `loyalty/wallets/${customerId}`);
-    await runTransaction(walletRef, (current: LoyaltyWallet | null) => {
-      const cur = current || {
+    let balanceAfter = 0;
+    await runTransaction(db, async (tx) => {
+      const idempSnap = await tx.get(idempotencyRef);
+      if (idempSnap.exists() && idempSnap.data()["done"] === true) {
+        return; // Already credited
+      }
+      const walletSnap = await tx.get(walletRef);
+      const cur = (walletSnap.data() as LoyaltyWallet | undefined) || {
         balance: 0,
         lifetime_earned: 0,
         lifetime_redeemed: 0,
         updated_at: new Date().toISOString(),
       };
-      return {
-        balance: (cur.balance || 0) + points,
+      balanceAfter = (cur.balance || 0) + points;
+      tx.set(walletRef, {
+        balance: balanceAfter,
         lifetime_earned: (cur.lifetime_earned || 0) + points,
         lifetime_redeemed: cur.lifetime_redeemed || 0,
         updated_at: new Date().toISOString(),
-      };
+      });
+      tx.set(idempotencyRef, { done: true, order_id: orderId, customer_id: customerId });
     });
 
+    if (!balanceAfter) {
+      return; // Transaction was a no-op (already credited)
+    }
+
     const entryId = `ledg_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36).slice(-4)}`;
-    const walletSnap = await get(walletRef);
-    const balanceAfter = (walletSnap.val() as LoyaltyWallet)?.balance || points;
 
     await rtdbSet(`loyalty/ledger/${customerId}/${entryId}`, {
       id: entryId,
@@ -559,31 +565,33 @@ export async function redeemLoyaltyPoints(
   const db = getDb();
   if (!db || !customerId || points <= 0) return false;
 
-  const walletRef = ref(db, `loyalty/wallets/${customerId}`);
+  const walletRef = doc(db, "loyalty_wallets", customerId);
   let success = false;
 
-  const res = await runTransaction(walletRef, (current: LoyaltyWallet | null) => {
-    const cur = current || {
+  const res = await runTransaction(db, async (tx) => {
+    const walletSnap = await tx.get(walletRef);
+    const cur = (walletSnap.data() as LoyaltyWallet | undefined) || {
       balance: 0,
       lifetime_earned: 0,
       lifetime_redeemed: 0,
       updated_at: new Date().toISOString(),
     };
-    if ((cur.balance || 0) < points) return; // Abort
+    if ((cur.balance || 0) < points) return null; // Abort — insufficient balance
     success = true;
-    return {
+    const next: LoyaltyWallet = {
       balance: Math.max(0, (cur.balance || 0) - points),
       lifetime_earned: cur.lifetime_earned || 0,
       lifetime_redeemed: (cur.lifetime_redeemed || 0) + points,
       updated_at: new Date().toISOString(),
     };
+    tx.set(walletRef, next);
+    return next;
   });
 
-  if (!res.committed || !success) return false;
+  if (!res || !success) return false;
+  const balanceAfter = res.balance || 0;
 
   const entryId = `ledg_${Math.random().toString(36).slice(2, 9)}_${Date.now().toString(36).slice(-4)}`;
-  const walletSnap = await get(walletRef);
-  const balanceAfter = (walletSnap.val() as LoyaltyWallet)?.balance || 0;
 
   await rtdbSet(`loyalty/ledger/${customerId}/${entryId}`, {
     id: entryId,
@@ -602,6 +610,10 @@ export async function redeemLoyaltyPoints(
 export async function incrementCouponUsage(couponId: string): Promise<void> {
   const db = getDb();
   if (!db || !couponId) return;
-  const couponRef = ref(db, `promotions/codes/${couponId}/usage_count`);
-  await runTransaction(couponRef, (count: number | null) => (count || 0) + 1);
+  const couponRef = doc(db, "promotions_codes", couponId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(couponRef);
+    const count = Number(snap.data()?.["usage_count"] ?? 0);
+    tx.set(couponRef, { usage_count: count + 1 }, { merge: true });
+  });
 }

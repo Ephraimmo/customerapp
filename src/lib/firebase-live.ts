@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getDb, onValue, ref } from "./firebase";
+import { getDb, resolveTarget, subscribeRoot, subscribeTarget, type RTDBValue } from "./firebase";
 
 /** Anything Firebase can hand back. */
 export type FirebaseValue = unknown;
@@ -49,22 +49,31 @@ function subscribe(
       detach: () => {},
       last: null,
     };
-    const unsubscribe = onValue(
-      ref(db, path),
-      (snap) => {
-        const payload = { data: snap.val() as FirebaseValue, error: null };
-        created.last = payload;
-        writeCache(path, payload.data);
-        created.subscribers.forEach((fn) => fn(payload));
-      },
-      (error) => {
-        // Missing or restricted node: keep the app alive with an empty state.
-        console.warn(`[firebase] listener failed for "${path}"`, error.message);
-        const payload = { data: null as FirebaseValue, error: error as Error };
-        created.last = payload;
-        created.subscribers.forEach((fn) => fn(payload));
-      },
-    );
+    // "/" is a virtual root assembled from the canonical Firestore
+    // collections; every other path resolves through the compatibility layer.
+    const unsubscribe =
+      path === "/"
+        ? subscribeRoot((payload) => {
+            created.last = payload;
+            writeCache(path, payload.data);
+            created.subscribers.forEach((fn) => fn(payload));
+          })
+        : subscribeTarget(
+            resolveTarget(path),
+            (data: RTDBValue) => {
+              const payload = { data: data as FirebaseValue, error: null };
+              created.last = payload;
+              writeCache(path, payload.data);
+              created.subscribers.forEach((fn) => fn(payload));
+            },
+            (error: Error) => {
+              // Missing or restricted node: keep the app alive with an empty state.
+              console.warn(`[firebase] listener failed for "${path}"`, error.message);
+              const payload = { data: null as FirebaseValue, error: error as Error };
+              created.last = payload;
+              created.subscribers.forEach((fn) => fn(payload));
+            },
+          );
     created.detach = unsubscribe;
     listeners.set(path, created);
     entry = created;
