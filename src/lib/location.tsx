@@ -102,7 +102,7 @@ export const INITIAL_SAVED_LOCATIONS: SavedLocation[] = [];
 
 const LOCATIONS_STORAGE_KEY = "hearth.saved_locations.v3";
 const ACTIVE_LOCATION_ID_KEY = "hearth.active_location_id.v3";
-const GOOGLE_MAPS_API_KEY = import.meta.env["VITE_GOOGLE_MAPS_API_KEY"] as string | undefined;
+
 
 interface LocationContextType {
   locations: SavedLocation[];
@@ -153,36 +153,41 @@ export async function reverseGeocodeCoordinates(coords: {
   latitude: number;
   longitude: number;
 }): Promise<ReverseGeocodeResult | null> {
-  if (!GOOGLE_MAPS_API_KEY) return null;
-
+  // Keyless OpenStreetMap (Nominatim) reverse geocoding — no API key or billing needed.
   const params = new URLSearchParams({
-    latlng: `${coords.latitude},${coords.longitude}`,
-    key: GOOGLE_MAPS_API_KEY,
+    format: "jsonv2",
+    lat: String(coords.latitude),
+    lon: String(coords.longitude),
+    zoom: "18",
+    addressdetails: "1",
   });
-  const response = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
-  if (!response.ok) throw new Error(`Google Geocoding request failed (${response.status})`);
+  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(`Reverse geocoding request failed (${response.status})`);
 
   const data = (await response.json()) as {
-    status: string;
-    results?: Array<{
-      formatted_address?: string;
-      address_components?: Array<{ long_name: string; types: string[] }>;
-    }>;
+    display_name?: string;
+    address?: Record<string, string>;
   };
-  if (data.status !== "OK" || !data.results?.[0]) return null;
-
-  const result = data.results[0];
-  const component = (type: string) =>
-    result.address_components?.find((item) => item.types.includes(type))?.long_name || "";
-  const street = [component("street_number"), component("route")].filter(Boolean).join(" ");
+  const address = data.address ?? {};
+  const street = [address["house_number"], address["road"] || address["pedestrian"]]
+    .filter(Boolean)
+    .join(" ");
 
   return {
-    street: street || result.formatted_address || `${coords.latitude}, ${coords.longitude}`,
+    street: street || data.display_name || `${coords.latitude}, ${coords.longitude}`,
     city:
-      component("locality") || component("postal_town") || component("administrative_area_level_2"),
-    postal_code: component("postal_code"),
+      address["city"] ||
+      address["town"] ||
+      address["village"] ||
+      address["suburb"] ||
+      address["county"] ||
+      "",
+    postal_code: address["postcode"] || "",
   };
 }
+
 
 function locationFromCoordinates(
   coords: GpsCoordinates,

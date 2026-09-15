@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type Context,
   type ReactNode,
 } from "react";
 import {
@@ -49,7 +50,7 @@ import {
   usePromoCampaigns,
   useRestaurantPointsOverrides,
 } from "./firebase-adapters";
-import { rtdbGet, rtdbSet, rtdbSubscribe } from "./firebase";
+import { fsSubscribeWhere, rtdbGet, rtdbSet, rtdbSubscribe } from "./firebase";
 
 export type CartLine = {
   lineId: string;
@@ -180,7 +181,15 @@ type CartState = {
   storage: "cloud" | "local";
 };
 
-const CartContext = createContext<CartState | null>(null);
+// Keep a single context instance even if this module gets re-evaluated
+// (HMR updates, duplicated module graph). Otherwise the provider and consumers
+// can end up on different contexts and useCart throws "must be used inside CartProvider".
+const globalStore = globalThis as unknown as {
+  __hearthCartContext?: Context<CartState | null>;
+};
+const CartContext: Context<CartState | null> =
+  globalStore.__hearthCartContext ?? createContext<CartState | null>(null);
+globalStore.__hearthCartContext = CartContext;
 
 const CART_KEY = "hearth.cart.v4";
 const PLACED_ORDERS_KEY = "hearth.placed_orders.v4";
@@ -295,14 +304,43 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }, [user, hydrated]);
 
-  // Listen to all orders from Firebase Realtime Database
+  // Only this customer's orders are streamed (plus locally placed guest orders
+  // fetched once), instead of downloading the whole orders collection.
   useEffect(() => {
     if (!hydrated) return;
-    const unsubscribe = rtdbSubscribe<Record<string, FirebaseOrder>>("orders", (all) => {
-      setFirebaseOrders(all ?? {});
+
+    const merge = (incoming: Record<string, FirebaseOrder>) =>
+      setFirebaseOrders((prev) => ({ ...prev, ...incoming }));
+
+    const stops: Array<() => void> = [];
+
+    if (user?.uid) {
+      stops.push(
+        fsSubscribeWhere<FirebaseOrder>("orders", "customer_id", user.uid, (all) =>
+          merge(all ?? {}),
+        ),
+      );
+      if (user.email) {
+        stops.push(
+          fsSubscribeWhere<FirebaseOrder>("orders", "customer_email", user.email, (all) =>
+            merge(all ?? {}),
+          ),
+        );
+      }
+    }
+
+    // Recent guest/local orders: watch only the ids this device placed.
+    placedOrderIds.slice(-10).forEach((id) => {
+      stops.push(
+        rtdbSubscribe<FirebaseOrder>(`orders/${id}`, (order) => {
+          if (order) merge({ [id]: order });
+        }),
+      );
     });
-    return () => unsubscribe();
-  }, [hydrated]);
+
+    return () => stops.forEach((stop) => stop());
+  }, [hydrated, user?.uid, user?.email, placedOrderIds.join(",")]);
+
 
   // Credit loyalty points when delivery orders transition to "delivered" (§6 & §9 of Integration Guide)
   useEffect(() => {

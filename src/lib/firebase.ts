@@ -1,13 +1,17 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import {
+  addDoc,
   collection,
   deleteDoc,
   doc,
   getDoc,
   getDocs,
   getFirestore,
+  initializeFirestore,
   limit,
   onSnapshot,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   query,
   setDoc,
   where,
@@ -18,6 +22,13 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 
+import { perfListenerOpened, perfRecordRead, perfRecordSnapshot } from "./perf-log";
+
+/**
+ * Firebase config for the shared ForkFleet backend (`e-comm-bd997`).
+ * `databaseURL` is intentionally absent — the Realtime Database is gone and
+ * every read/write goes to Cloud Firestore (see docs handover §1).
+ */
 export const firebaseConfig = {
   apiKey:
     (import.meta.env["VITE_FIREBASE_API_KEY"] as string | undefined) ||
@@ -29,7 +40,9 @@ export const firebaseConfig = {
   appId: "1:280613901400:web:bf168e55508b9102dda62d",
 };
 
+/** Legacy alias kept so call sites don't churn. Any JSON value Firestore returns. */
 export type RTDBValue = unknown;
+export type FirestoreValue = unknown;
 
 let cachedApp: FirebaseApp | null = null;
 let cachedDb: Firestore | null = null;
@@ -48,7 +61,7 @@ export function getFirebaseApp(): FirebaseApp | null {
     try {
       cachedApp = initializeApp(firebaseConfig, "forkfleet-customer");
     } catch {
-      cachedApp = getApps()[0] || initializeApp(firebaseConfig);
+      cachedApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
     }
   }
   return cachedApp;
@@ -60,18 +73,69 @@ export function getDb(): Firestore | null {
   if (cachedDb) return cachedDb;
   const app = getFirebaseApp();
   if (!app) return null;
-  cachedDb = getFirestore(app);
+  try {
+    // Persistent local cache: repeat visits and reloads are served from IndexedDB
+    // and listeners resume from a cached snapshot, so far less data is downloaded.
+    cachedDb = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    cachedDb = getFirestore(app);
+  }
   return cachedDb;
 }
 
+
 /* -------------------------------------------------------------------------- */
-/*  Path resolution: legacy slash paths → Firestore documents/collections.    */
+/*  Path resolution — must match the operator portal's src/lib/firestore.ts.   */
 /*                                                                            */
-/*  Every node the customer app reads or writes is mapped to an explicit      */
-/*  Firestore location. Even-depth object paths map naturally; legacy         */
-/*  "map" nodes (keyed records) are flattened into dedicated collections so   */
-/*  subscriptions keep returning the same Record<id, value> payloads.         */
+/*  Rules (docs/FIRESTORE_MIGRATION_HANDOVER.md §2):                          */
+/*   1. A declared collection prefix is a Firestore collection; the next       */
+/*      segment is a document id and anything deeper is a nested field path    */
+/*      inside that document (same semantics as the old RTDB subtree).         */
+/*   2. Firestore collection paths need an odd segment count — when a logical   */
+/*      collection path is even-length, the container document `_` is inserted  */
+/*      before its final segment (promotions/codes → promotions/_/codes).      */
 /* -------------------------------------------------------------------------- */
+
+/** `*` matches exactly one dynamic segment. Order does not matter (longest wins). */
+const COLLECTION_PREFIXES: string[][] = [
+  ["restaurants"],
+  ["restaurantBranches"],
+  ["orders"],
+  ["drivers"],
+  ["driverAssignments"],
+  ["staffUsers"],
+  ["staffAudit"],
+  ["restaurantUsers"],
+  ["restaurantUserAudit"],
+  ["menus", "*", "categories"],
+  ["menus", "*", "items"],
+  ["menus", "*", "variants"],
+  ["menus", "*", "addons"],
+  ["menus", "*", "modifiers"],
+  ["promotions"],
+  ["promotions", "codes"],
+  ["promotions", "combos"],
+  ["promotions", "restaurant_points"],
+  ["notificationAlerts"],
+  ["notificationTriggers"],
+  ["notificationReads"],
+  ["notificationAudit"],
+  ["settings"],
+  ["settingsAudit"],
+  ["support", "tickets"],
+  ["support", "messages"],
+  ["uploads", "images"],
+  ["loyalty", "wallets"],
+  ["loyalty", "ledger"],
+  ["loyalty", "earned_orders"],
+  // Customer-app owned nodes (not portal-declared, listed here so their deeper
+  // segments behave as nested fields exactly like every other prefix).
+  ["customerAddresses"],
+  ["customers"],
+  ["branchMenuAvailability"],
+];
 
 type FsTarget =
   | { kind: "doc"; path: string; inject?: Record<string, unknown> }
@@ -79,124 +143,45 @@ type FsTarget =
   | { kind: "collectionQuery"; path: string; field: string; equals: string }
   | { kind: "field"; path: string; field: string };
 
+/** Number of leading segments consumed by the longest matching collection prefix. */
+function matchPrefixLength(segs: string[]): number {
+  let best = 0;
+  for (const prefix of COLLECTION_PREFIXES) {
+    if (prefix.length > segs.length || prefix.length <= best) continue;
+    const ok = prefix.every((part, i) => part === "*" || part === segs[i]);
+    if (ok) best = prefix.length;
+  }
+  return best;
+}
+
+/** Even-length logical collection paths get the `_` container document. */
+function toCollectionPath(prefixSegs: string[]): string {
+  if (prefixSegs.length % 2 === 1) return prefixSegs.join("/");
+  const head = prefixSegs.slice(0, -1);
+  return [...head, "_", prefixSegs[prefixSegs.length - 1]!].join("/");
+}
+
 export function resolveTarget(rawPath: string): FsTarget {
   const p = rawPath.replace(/^\/+|\/+$/g, "");
   const segs = p.split("/").filter(Boolean);
-  const [a, b, c] = segs;
 
-  switch (a) {
-    case "orders": {
-      if (segs.length === 1) return { kind: "collection", path: "orders" };
-      if (segs.length === 2 && b) return { kind: "doc", path: `orders/${b}` };
-      if (!b || !c) break;
-      if ((c === "items" || c === "timeline") && segs.length === 3)
-        return { kind: "collection", path: `orders/${b}/${c}` };
-      if ((c === "items" || c === "timeline") && segs.length === 4)
-        return { kind: "doc", path: `orders/${b}/${c}/${segs[3]}` };
-      if (c === "payment" && segs.length === 3)
-        return { kind: "doc", path: `orders/${b}/payment/current` };
-      if (c === "payment_status" && segs.length === 3)
-        return { kind: "field", path: `orders/${b}`, field: "payment_status" };
-      if (c === "promo_breakdown" && segs.length === 3)
-        return { kind: "field", path: `orders/${b}`, field: "promo_breakdown" };
-      break;
-    }
-
-    case "drivers": {
-      // drivers/live/{orderId} → single live-location document
-      if (b === "live" && segs.length === 3 && c) return { kind: "doc", path: `driver_live/${c}` };
-      break;
-    }
-
-    case "support": {
-      // support/messages/{ticketId}[/{messageId}] → messages subcollection
-      if (a === "support" && b === "messages") {
-        if (segs.length === 3 && c)
-          return { kind: "collection", path: `support/tickets/${c}/messages` };
-        if (segs.length === 4 && c)
-          return { kind: "doc", path: `support/tickets/${c}/messages/${segs[3]}` };
-      }
-      break;
-    }
-
-    case "customerAddresses": {
-      // Per-customer saved addresses, flattened with an owner_id field
-      if (segs.length === 2 && b)
-        return {
-          kind: "collectionQuery",
-          path: "customer_addresses",
-          field: "owner_id",
-          equals: b,
-        };
-      if (segs.length === 3 && b && c)
-        return {
-          kind: "doc",
-          path: `customer_addresses/${c}`,
-          inject: { owner_id: b },
-        };
-      if (segs.length === 4 && b && c)
-        return { kind: "field", path: `customer_addresses/${c}`, field: String(segs[3]) };
-      break;
-    }
-
-    case "loyalty": {
-      if (b === "wallets" && segs.length === 3 && c)
-        return { kind: "doc", path: `loyalty_wallets/${c}` };
-      if (b === "earned_orders" && segs.length === 4 && c)
-        return { kind: "doc", path: `loyalty_earned_orders/${c}__${segs[3]}` };
-      if (b === "ledger" && segs.length === 3 && c)
-        return { kind: "collectionQuery", path: "loyalty_ledger", field: "customer_id", equals: c };
-      if (b === "ledger" && segs.length === 4 && c)
-        return {
-          kind: "doc",
-          path: `loyalty_ledger/${segs[3]}`,
-          inject: { customer_id: c },
-        };
-      break;
-    }
-
-    case "promotions": {
-      if (p === "promotions/codes") return { kind: "collection", path: "promotions_codes" };
-      if (p === "promotions/combos") return { kind: "collection", path: "promotions_combos" };
-      if (p === "promotions/global/points_config")
-        return { kind: "doc", path: "config/points_config" };
-      if (p === "promotions/restaurant_points")
-        return { kind: "collection", path: "promotion_restaurant_points" };
-      break;
-    }
-
-    case "restaurants": {
-      // restaurants/{rid}/payment_config → dedicated config collection
-      if (segs.length === 3 && b && c === "payment_config")
-        return { kind: "doc", path: `restaurant_payment_config/${b}` };
-      break;
-    }
-
-    case "restaurantBranches": {
-      // restaurantBranches/{rid} → branches collection filtered by restaurant_id
-      if (segs.length === 2 && b)
-        return {
-          kind: "collectionQuery",
-          path: "restaurant_branches",
-          field: "restaurant_id",
-          equals: b,
-        };
-      break;
-    }
-
-    case "branchMenuAvailability": {
-      // branchMenuAvailability/{rid}/{bid} → composite-key overlay document
-      if (segs.length === 3 && b && c)
-        return { kind: "doc", path: `branch_menu_availability/${b}__${c}` };
-      break;
-    }
-
-    default:
-      break;
+  const prefixLength = matchPrefixLength(segs);
+  if (prefixLength > 0) {
+    const collectionPath = toCollectionPath(segs.slice(0, prefixLength));
+    const rest = segs.slice(prefixLength);
+    if (rest.length === 0) return { kind: "collection", path: collectionPath };
+    if (rest.length === 1) return { kind: "doc", path: `${collectionPath}/${rest[0]}` };
+    return {
+      kind: "field",
+      path: `${collectionPath}/${rest[0]}`,
+      field: rest.slice(1).join("."),
+    };
   }
 
-  // Default mapping: even segment count → document, odd → subcollection.
-  return segs.length % 2 === 0 ? { kind: "doc", path: p } : { kind: "collection", path: p };
+  // Undeclared paths: even segment count → document, odd → collection.
+  return segs.length % 2 === 0
+    ? { kind: "doc", path: p }
+    : { kind: "collection", path: toCollectionPath(segs) };
 }
 
 /** Firestore rejects `undefined`; the RTDB layer tolerated it. Strip it deeply. */
@@ -212,6 +197,26 @@ function sanitize<T>(value: T): T {
     out[key] = sanitize(val);
   }
   return out as T;
+}
+
+/** Reads a possibly nested ("a.b.c") field out of a document payload. */
+function readField(data: Record<string, unknown> | undefined, field: string): unknown {
+  if (!data) return null;
+  let cursor: unknown = data;
+  for (const key of field.split(".")) {
+    if (!cursor || typeof cursor !== "object") return null;
+    cursor = (cursor as Record<string, unknown>)[key];
+  }
+  return cursor ?? null;
+}
+
+/** Builds `{ a: { b: value } }` for a nested field write (merge-safe). */
+function nestField(field: string, value: unknown): Record<string, unknown> {
+  const keys = field.split(".");
+  return keys.reduceRight<unknown>((acc, key) => ({ [key]: acc }), value) as Record<
+    string,
+    unknown
+  >;
 }
 
 function docRef(db: Firestore, target: { path: string }): DocumentReference {
@@ -233,7 +238,20 @@ function collRef(
   return collection(db, parts[0], ...parts.slice(1));
 }
 
-async function readTarget(target: FsTarget): Promise<RTDBValue> {
+/**
+ * Resolves a logical path to a Firestore document reference plus the nested
+ * field it points at (if any). Exported for `runTransaction` call sites.
+ */
+export function fsDocRef(path: string): { ref: DocumentReference; field: string | null } | null {
+  const db = getDb();
+  if (!db) return null;
+  const target = resolveTarget(path);
+  if (target.kind === "doc") return { ref: docRef(db, target), field: null };
+  if (target.kind === "field") return { ref: docRef(db, target), field: target.field };
+  return null;
+}
+
+async function readTarget(target: FsTarget): Promise<FirestoreValue> {
   const db = getDb();
   if (!db) return null;
 
@@ -243,16 +261,17 @@ async function readTarget(target: FsTarget): Promise<RTDBValue> {
   }
   if (target.kind === "field") {
     const snap = await getDoc(docRef(db, target));
-    return snap.exists() ? (snap.data()[target.field] ?? null) : null;
+    return snap.exists() ? readField(snap.data(), target.field) : null;
   }
   const base = collRef(db, target);
   const q =
     target.kind === "collectionQuery"
       ? query(base, where(target.field, "==", target.equals))
-      : query(base, limit(2000));
+      : query(base, limit(400));
   const snaps = await getDocs(q);
   const record: Record<string, unknown> = {};
   snaps.forEach((d) => {
+    if (d.id === "_") return;
     record[d.id] = d.data();
   });
   return record;
@@ -265,9 +284,7 @@ async function writeTarget(target: FsTarget, value: unknown): Promise<void> {
   const clean = sanitize(value);
 
   if (target.kind === "field") {
-    await setDoc(docRef(db, target), clean === null ? {} : { [target.field]: clean }, {
-      merge: true,
-    });
+    await setDoc(docRef(db, target), nestField(target.field, clean), { merge: true });
     return;
   }
   if (target.kind === "doc") {
@@ -292,29 +309,31 @@ async function writeTarget(target: FsTarget, value: unknown): Promise<void> {
   if (ops > 0) await batch.commit();
 }
 
-export async function rtdbGet<T = RTDBValue>(path: string): Promise<T | null> {
+export async function fsGet<T = FirestoreValue>(path: string): Promise<T | null> {
   const db = getDb();
   if (!db) return null;
   try {
-    return ((await readTarget(resolveTarget(path))) as T) ?? null;
+    const value = ((await readTarget(resolveTarget(path))) as T) ?? null;
+    perfRecordRead(path, value);
+    return value;
   } catch (error) {
-    console.warn(`[firebase] rtdbGet failed for "${path}":`, error);
+    console.warn(`[firestore] get failed for "${path}":`, error);
     return null;
   }
 }
 
-export async function rtdbSet<T = unknown>(path: string, value: T): Promise<void> {
+export async function fsSet<T = unknown>(path: string, value: T): Promise<void> {
   const db = getDb();
   if (!db) return;
   try {
     await writeTarget(resolveTarget(path), value);
   } catch (error) {
-    console.error(`[firebase] rtdbSet failed for "${path}":`, error);
+    console.error(`[firestore] set failed for "${path}":`, error);
     throw error;
   }
 }
 
-export async function rtdbUpdate(path: string, values: Record<string, unknown>): Promise<void> {
+export async function fsUpdate(path: string, values: Record<string, unknown>): Promise<void> {
   const db = getDb();
   if (!db) return;
   try {
@@ -324,22 +343,30 @@ export async function rtdbUpdate(path: string, values: Record<string, unknown>):
       return;
     }
     if (target.kind === "field") {
-      await setDoc(
-        docRef(db, target),
-        { [target.field]: sanitize(values[target.field]) },
-        { merge: true },
-      );
+      // Merge each provided key underneath the nested field path.
+      await setDoc(docRef(db, target), nestField(target.field, sanitize(values)), { merge: true });
       return;
     }
-    // Fallback for collection targets: merge-write every provided key.
     await writeTarget(target, values);
   } catch (error) {
-    console.error(`[firebase] rtdbUpdate failed for "${path}":`, error);
+    console.error(`[firestore] update failed for "${path}":`, error);
     throw error;
   }
 }
 
-export async function rtdbRemove(path: string): Promise<void> {
+/** Auto-id document inside a logical collection. Returns the new id. */
+export async function fsPush(path: string, value: unknown): Promise<string | null> {
+  const db = getDb();
+  if (!db) return null;
+  const target = resolveTarget(path);
+  if (target.kind !== "collection" && target.kind !== "collectionQuery") {
+    throw new Error(`fsPush requires a collection path, got "${path}"`);
+  }
+  const created = await addDoc(collRef(db, target), sanitize(value) as object);
+  return created.id;
+}
+
+export async function fsRemove(path: string): Promise<void> {
   const db = getDb();
   if (!db) return;
   try {
@@ -349,19 +376,19 @@ export async function rtdbRemove(path: string): Promise<void> {
       return;
     }
     if (target.kind === "field") {
-      await setDoc(docRef(db, target), {}, { merge: true });
+      await setDoc(docRef(db, target), nestField(target.field, null), { merge: true });
       return;
     }
-    throw new Error(`rtdbRemove does not support ${target.kind} targets`);
+    throw new Error(`fsRemove does not support ${target.kind} targets`);
   } catch (error) {
-    console.error(`[firebase] rtdbRemove failed for "${path}":`, error);
+    console.error(`[firestore] remove failed for "${path}":`, error);
     throw error;
   }
 }
 
 export function subscribeTarget(
   target: FsTarget,
-  onData: (value: RTDBValue) => void,
+  onData: (value: FirestoreValue) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   const db = getDb() as Firestore;
@@ -376,7 +403,7 @@ export function subscribeTarget(
   if (target.kind === "field") {
     return onSnapshot(
       docRef(db, target),
-      (snap) => onData(snap.exists() ? (snap.data()[target.field] ?? null) : null),
+      (snap) => onData(snap.exists() ? readField(snap.data(), target.field) : null),
       (error) => onError(error),
     );
   }
@@ -384,12 +411,13 @@ export function subscribeTarget(
   const q =
     target.kind === "collectionQuery"
       ? query(base, where(target.field, "==", target.equals))
-      : query(base, limit(2000));
+      : query(base, limit(400));
   return onSnapshot(
     q,
     (snaps) => {
       const record: Record<string, unknown> = {};
       snaps.forEach((d) => {
+        if (d.id === "_") return;
         record[d.id] = d.data();
       });
       onData(record);
@@ -398,7 +426,7 @@ export function subscribeTarget(
   );
 }
 
-export function rtdbSubscribe<T = RTDBValue>(
+export function fsSubscribe<T = FirestoreValue>(
   path: string,
   callback: (data: T | null) => void,
 ): () => void {
@@ -407,36 +435,92 @@ export function rtdbSubscribe<T = RTDBValue>(
     callback(null);
     return () => {};
   }
+  const closePerf = perfListenerOpened(path);
   const unsubscribe = subscribeTarget(
     resolveTarget(path),
-    (data) => callback(data as T),
+    (data) => {
+      perfRecordSnapshot(path, data);
+      callback(data as T);
+    },
     (error) => {
-      console.warn(`[firebase] rtdbSubscribe failed for "${path}":`, error.message);
+      console.warn(`[firestore] subscribe failed for "${path}":`, error.message);
       callback(null);
     },
   );
   return () => {
+    closePerf();
     unsubscribe();
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Root subscription ("/"): assembles the canonical discovery collections    */
-/*  into the same JSON-tree shape the schema discovery used to read.          */
-/* -------------------------------------------------------------------------- */
-
-function groupByField(record: Record<string, unknown>, field: string): Record<string, unknown> {
-  const grouped: Record<string, Record<string, unknown>> = {};
-  for (const [id, value] of Object.entries(record)) {
-    const owner = String((value as Record<string, unknown>)?.[field] ?? "");
-    grouped[owner] = grouped[owner] ?? {};
-    grouped[owner][id] = value;
+/**
+ * Subscribes to a *filtered* slice of a logical collection, so the client only
+ * downloads the documents it actually needs (e.g. one customer's orders).
+ */
+export function fsSubscribeWhere<T = FirestoreValue>(
+  path: string,
+  field: string,
+  equals: string,
+  callback: (data: Record<string, T> | null) => void,
+  max = 100,
+): () => void {
+  const db = getDb();
+  if (!db) {
+    callback(null);
+    return () => {};
   }
-  return grouped;
+  const target = resolveTarget(path);
+  if (target.kind !== "collection") {
+    callback(null);
+    return () => {};
+  }
+  const base = collRef(db, target);
+  const label = `${path}?${field}=${equals}`;
+  const closePerf = perfListenerOpened(label);
+  const unsubscribe = onSnapshot(
+    query(base, where(field, "==", equals), limit(max)),
+    (snaps) => {
+      const record: Record<string, T> = {};
+      snaps.forEach((d) => {
+        if (d.id === "_") return;
+        record[d.id] = d.data() as T;
+      });
+      perfRecordSnapshot(label, record);
+      callback(record);
+    },
+    (error) => {
+      console.warn(`[firestore] filtered subscribe failed for "${path}":`, error.message);
+      callback(null);
+    },
+  );
+  return () => {
+    closePerf();
+    unsubscribe();
+  };
 }
 
+
+/* ------------------------ legacy names (same impl) ------------------------- */
+
+export const rtdbGet = fsGet;
+export const rtdbSet = fsSet;
+export const rtdbUpdate = fsUpdate;
+export const rtdbRemove = fsRemove;
+export const rtdbSubscribe = fsSubscribe;
+
+/* -------------------------------------------------------------------------- */
+/*  Root subscription ("/"): assembles the portal's canonical collections      */
+/*  into the JSON-tree shape the discovery/adapter layer reads.                */
+/* -------------------------------------------------------------------------- */
+
+/** Menus are fetched once per restaurant per session and reused. */
+const menuCache = new Map<string, Record<string, Record<string, unknown>>>();
+const menuFetches = new Set<string>();
+
+const MENU_SUBCOLLECTIONS = ["items", "categories", "variants", "addons"] as const;
+
 export function subscribeRoot(
-  cb: (snapshot: { data: RTDBValue; error: Error | null }) => void,
+  cb: (snapshot: { data: FirestoreValue; error: Error | null }) => void,
 ): () => void {
   const db = getDb();
   if (!db) {
@@ -445,77 +529,105 @@ export function subscribeRoot(
   }
 
   const state: Record<string, Record<string, unknown>> = {};
-  const stops: Array<() => void> = [];
-  const expected = 9;
-  let ready = 0;
-  const emitted = false;
+  /** menus[restaurantId][subcollection] = Record<id, doc> */
+  const menus: Record<string, Record<string, Record<string, unknown>>> = {};
+  const stops = new Map<string, () => void>();
+  let restaurantsReady = false;
+  let lastError: Error | null = null;
 
   const combined = () => ({
     restaurants: state["restaurants"] ?? {},
-    menu_items: state["menu_items"] ?? {},
-    menus: state["menus"] ?? {},
-    categories: state["categories"] ?? {},
+    menus,
+    // Branch maps live as fields on restaurantBranches/{restaurantId}.
+    restaurantBranches: state["restaurantBranches"] ?? {},
     promotions: {
       codes: state["promotions_codes"] ?? {},
       combos: state["promotions_combos"] ?? {},
       global: { points_config: state["points_config"] ?? {} },
-      restaurant_points: state["promotion_restaurant_points"] ?? {},
+      restaurant_points: state["promotions_restaurant_points"] ?? {},
     },
-    restaurantBranches: groupByField(state["restaurant_branches"] ?? {}, "restaurant_id"),
   });
 
-  const settle = (error: Error | null) => {
-    ready += 1;
-    if (ready < expected) return;
-    cb({ data: combined(), error });
+  const emit = () => {
+    if (!restaurantsReady) return;
+    cb({ data: combined(), error: lastError });
   };
 
-  const listenCollection = (key: string, path: string) => {
-    const stop = onSnapshot(
-      query(collRef(db, { kind: "collection", path }), limit(2000)),
-      (snaps) => {
-        const record: Record<string, unknown> = {};
-        snaps.forEach((d) => {
-          record[d.id] = d.data();
-        });
-        state[key] = record;
-        settle(null);
-      },
-      (error) => {
-        console.warn(`[firebase] root listener failed for "${path}"`, error.message);
-        settle(error);
-      },
-    );
-    stops.push(() => stop());
+  const listenCollection = (key: string, logicalPath: string, onRecord?: () => void) => {
+    const stop = fsSubscribe<Record<string, unknown>>(logicalPath, (record) => {
+      state[key] = record && typeof record === "object" ? record : {};
+      onRecord?.();
+      emit();
+    });
+    stops.set(key, stop);
   };
 
-  const listenDoc = (key: string, path: string) => {
-    const parts = path.split("/");
-    const stop = onSnapshot(
-      doc(db, parts[0]!, parts[1]!),
-      (snap) => {
-        state[key] = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
-        settle(null);
-      },
-      (error) => {
-        console.warn(`[firebase] root listener failed for "${path}"`, error.message);
-        settle(error);
-      },
-    );
-    stops.push(() => stop());
+  // Per-restaurant menus (menus/{rid}/items, …) are fetched once instead of
+  // being live-listened: menus are large and rarely change mid-session, so a
+  // single cached read per restaurant keeps data usage low.
+  const fetchMenus = () => {
+    const raw = state["restaurants"] ?? {};
+    const ids = Object.keys(raw).filter((rid) => {
+      const doc = raw[rid] as Record<string, unknown> | undefined;
+      const status = typeof doc?.["status"] === "string" ? String(doc["status"]).toLowerCase() : "";
+      return !status || /approved|active|live|published/.test(status);
+    });
+
+    for (const rid of ids) {
+      const cached = menuCache.get(rid);
+      if (cached) {
+        menus[rid] = cached;
+        continue;
+      }
+      if (menuFetches.has(rid)) continue;
+      menuFetches.add(rid);
+      void Promise.all(
+        MENU_SUBCOLLECTIONS.map(async (sub) => {
+          const record = await fsGet<Record<string, unknown>>(`menus/${rid}/${sub}`);
+          return [sub, record && typeof record === "object" ? record : {}] as const;
+        }),
+      ).then((entries) => {
+        const bundle = Object.fromEntries(entries) as Record<string, Record<string, unknown>>;
+        menuCache.set(rid, bundle);
+        menus[rid] = bundle;
+        emit();
+      });
+    }
+    emit();
   };
 
-  listenCollection("restaurants", "restaurants");
-  listenCollection("menu_items", "menu_items");
-  listenCollection("menus", "menus");
-  listenCollection("categories", "categories");
-  listenCollection("promotions_codes", "promotions_codes");
-  listenCollection("promotions_combos", "promotions_combos");
-  listenCollection("promotion_restaurant_points", "promotion_restaurant_points");
-  listenCollection("restaurant_branches", "restaurant_branches");
-  listenDoc("points_config", "config/points_config");
+
+  listenCollection("restaurants", "restaurants", () => {
+    restaurantsReady = true;
+    fetchMenus();
+  });
+  listenCollection("restaurantBranches", "restaurantBranches");
+  listenCollection("promotions_codes", "promotions/codes");
+  listenCollection("promotions_combos", "promotions/combos");
+  listenCollection("promotions_restaurant_points", "promotions/restaurant_points");
+
+  // promotions/global/points_config is a field on the promotions/global document.
+  const stopPoints = fsSubscribe<Record<string, unknown>>(
+    "promotions/global/points_config",
+    (value) => {
+      state["points_config"] = value && typeof value === "object" ? value : {};
+      emit();
+    },
+  );
+  stops.set("points_config", stopPoints);
+
+  // Never leave the UI hanging if Firestore is slow/unreachable.
+  const bootstrapTimer = setTimeout(() => {
+    if (!restaurantsReady) {
+      restaurantsReady = true;
+      lastError = null;
+      emit();
+    }
+  }, 4000);
 
   return () => {
+    clearTimeout(bootstrapTimer);
     stops.forEach((stop) => stop());
+    stops.clear();
   };
 }

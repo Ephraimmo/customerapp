@@ -1,5 +1,5 @@
-import { rtdbGet, rtdbSet, rtdbUpdate, getDb } from "./firebase";
-import { doc, runTransaction } from "firebase/firestore";
+import { rtdbGet, rtdbSet, rtdbUpdate, getDb, fsDocRef } from "./firebase";
+import { runTransaction } from "firebase/firestore";
 
 /* -------------------------------------------------------------------------- */
 /*  1. Promotion & Loyalty Data Contracts                                      */
@@ -508,13 +508,15 @@ export async function creditLoyaltyPoints(
 
   try {
     // Idempotency flag + wallet increment commit atomically (Firestore transaction)
-    const walletRef = doc(db, "loyalty_wallets", customerId);
-    const idempotencyRef = doc(db, "loyalty_earned_orders", `${customerId}__${orderId}`);
+    const walletRef = fsDocRef(`loyalty/wallets/${customerId}`)?.ref;
+    const idempotencyRef = fsDocRef(`loyalty/earned_orders/${customerId}`)?.ref;
+    if (!walletRef || !idempotencyRef) return;
 
     let balanceAfter = 0;
     await runTransaction(db, async (tx) => {
       const idempSnap = await tx.get(idempotencyRef);
-      if (idempSnap.exists() && idempSnap.data()["done"] === true) {
+      // Earning stays idempotent per order via a field on the customer's doc.
+      if (idempSnap.exists() && idempSnap.data()[orderId]) {
         return; // Already credited
       }
       const walletSnap = await tx.get(walletRef);
@@ -531,7 +533,11 @@ export async function creditLoyaltyPoints(
         lifetime_redeemed: cur.lifetime_redeemed || 0,
         updated_at: new Date().toISOString(),
       });
-      tx.set(idempotencyRef, { done: true, order_id: orderId, customer_id: customerId });
+      tx.set(
+        idempotencyRef,
+        { customer_id: customerId, [orderId]: { done: true, points, at: new Date().toISOString() } },
+        { merge: true },
+      );
     });
 
     if (!balanceAfter) {
@@ -565,7 +571,8 @@ export async function redeemLoyaltyPoints(
   const db = getDb();
   if (!db || !customerId || points <= 0) return false;
 
-  const walletRef = doc(db, "loyalty_wallets", customerId);
+  const walletRef = fsDocRef(`loyalty/wallets/${customerId}`)?.ref;
+  if (!walletRef) return false;
   let success = false;
 
   const res = await runTransaction(db, async (tx) => {
@@ -610,7 +617,8 @@ export async function redeemLoyaltyPoints(
 export async function incrementCouponUsage(couponId: string): Promise<void> {
   const db = getDb();
   if (!db || !couponId) return;
-  const couponRef = doc(db, "promotions_codes", couponId);
+  const couponRef = fsDocRef(`promotions/codes/${couponId}`)?.ref;
+  if (!couponRef) return;
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(couponRef);
     const count = Number(snap.data()?.["usage_count"] ?? 0);

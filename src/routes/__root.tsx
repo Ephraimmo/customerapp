@@ -17,6 +17,7 @@ import { LocationProvider } from "@/lib/location";
 import { Toaster } from "@/components/ui/sonner";
 import { TopNav } from "@/components/app/top-nav";
 import { useLiveSync } from "@/lib/firebase-adapters";
+import { initPerfLogging } from "@/lib/perf-log";
 
 function NotFoundComponent() {
   return (
@@ -133,6 +134,9 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function FirebaseSync() {
   useLiveSync();
+  useEffect(() => {
+    initPerfLogging();
+  }, []);
   return null;
 }
 

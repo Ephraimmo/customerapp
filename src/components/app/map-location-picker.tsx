@@ -1,26 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type * as LeafletNamespace from "leaflet";
 import { Crosshair, Layers, MapPin, Navigation } from "lucide-react";
 import { toast } from "sonner";
-import { loadGoogleMaps } from "./delivery-map";
+import {
+  loadLeaflet,
+  OSM_ATTRIBUTION,
+  OSM_SATELLITE_TILES,
+  OSM_TILES,
+  SATELLITE_ATTRIBUTION,
+} from "@/lib/osm-map";
 import { reverseGeocodeCoordinates, SOUTH_AFRICAN_PRESETS, useLocation } from "@/lib/location";
 
 const SETTLE_DELAY_MS = 1000;
 const DEFAULT_ZOOM = 16;
 
-type GoogleLatLng = { lat: () => number; lng: () => number };
-type GoogleEventListener = { remove: () => void };
-type GooglePickerMap = {
-  addListener: (event: string, handler: () => void) => GoogleEventListener;
-  getCenter: () => GoogleLatLng | null;
-  panTo: (position: { lat: number; lng: number }) => void;
-  setCenter: (position: { lat: number; lng: number }) => void;
-  setMapTypeId: (mapTypeId: "roadmap" | "satellite") => void;
-};
-type GoogleMapsNamespace = {
-  maps: {
-    Map: new (element: HTMLElement, options: Record<string, unknown>) => GooglePickerMap;
-  };
-};
 
 export interface PickedLocationDetails {
   latitude: number;
@@ -60,9 +53,12 @@ export function MapLocationPicker({
   const { gpsCoordinates, detectGpsLocation, gpsError } = useLocation();
 
   const mapElement = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<GooglePickerMap | null>(null);
+  const mapRef = useRef<LeafletNamespace.Map | null>(null);
+  const tileLayerRef = useRef<LeafletNamespace.TileLayer | null>(null);
+  const leafletRef = useRef<typeof LeafletNamespace | null>(null);
   const settleTimer = useRef<number | null>(null);
   const geocodeSequence = useRef(0);
+
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -110,8 +106,8 @@ export function MapLocationPicker({
     try {
       const center = map.getCenter();
       if (!center) return;
-      const latitude = center.lat();
-      const longitude = center.lng();
+      const latitude = center.lat;
+      const longitude = center.lng;
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
       setSelected({ latitude, longitude });
       void resolveAddress(latitude, longitude, ++geocodeSequence.current);
@@ -119,6 +115,7 @@ export function MapLocationPicker({
       /* map not initialised yet */
     }
   }, [resolveAddress]);
+
 
   const scheduleSettle = useCallback(() => {
     setMoving(true);
@@ -132,59 +129,66 @@ export function MapLocationPicker({
 
   useEffect(() => {
     let cancelled = false;
-    let listener: GoogleEventListener | null = null;
 
-    void loadGoogleMaps()
-      .then((google) => {
+    void loadLeaflet()
+      .then((L) => {
         if (cancelled || !mapElement.current || typeof window === "undefined") return;
-        const g = google as unknown as GoogleMapsNamespace | undefined;
-        if (!g?.maps?.Map) {
-          setLoadError("Google Maps did not initialize");
-          setStatus("error");
-          return;
-        }
-        const center = {
-          lat: initialLatitude ?? gpsCoordinates?.latitude ?? fallbackPreset().latitude,
-          lng: initialLongitude ?? gpsCoordinates?.longitude ?? fallbackPreset().longitude,
-        };
-        const map = new g.maps.Map(mapElement.current, {
+        leafletRef.current = L;
+        const center: LeafletNamespace.LatLngTuple = [
+          initialLatitude ?? gpsCoordinates?.latitude ?? fallbackPreset().latitude,
+          initialLongitude ?? gpsCoordinates?.longitude ?? fallbackPreset().longitude,
+        ];
+        const map = L.map(mapElement.current, {
           center,
           zoom: DEFAULT_ZOOM,
-          fullscreenControl: false,
-          mapTypeControl: false,
-          streetViewControl: false,
           zoomControl: true,
-          gestureHandling: "greedy",
+          attributionControl: true,
         });
+        tileLayerRef.current = L.tileLayer(OSM_TILES, {
+          attribution: OSM_ATTRIBUTION,
+          maxZoom: 19,
+        }).addTo(map);
         mapRef.current = map;
-        listener = map.addListener("center_changed", scheduleSettle);
+        map.on("move", scheduleSettle);
         setStatus("ready");
         settleOnCenter();
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : "Google Maps failed to load");
+          setLoadError(error instanceof Error ? error.message : "The map failed to load");
           setStatus("error");
         }
       });
 
     return () => {
       cancelled = true;
-      listener?.remove();
       if (settleTimer.current) {
         window.clearTimeout(settleTimer.current);
         settleTimer.current = null;
       }
+      mapRef.current?.remove();
       mapRef.current = null;
+      tileLayerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleMapTypeChange(next: "roadmap" | "satellite") {
     setMapType(next);
-    // Switching layout never resets the selected location.
-    mapRef.current?.setMapTypeId(next);
+    // Switching layer never resets the selected location.
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    if (!L || !map) return;
+    tileLayerRef.current?.remove();
+    tileLayerRef.current = L.tileLayer(
+      next === "satellite" ? OSM_SATELLITE_TILES : OSM_TILES,
+      {
+        attribution: next === "satellite" ? SATELLITE_ATTRIBUTION : OSM_ATTRIBUTION,
+        maxZoom: 19,
+      },
+    ).addTo(map);
   }
+
 
   async function handleRecenter() {
     if (recentring || status !== "ready") return;
@@ -234,7 +238,7 @@ export function MapLocationPicker({
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {/* Interactive map with fixed centre pin */}
       <div className="relative h-[40vh] min-h-60 w-full shrink-0 overflow-hidden bg-secondary">
-        <div ref={mapElement} className="absolute inset-0" aria-label="Location picker map" />
+        <div ref={mapElement} className="absolute inset-0 z-0" aria-label="Location picker map" />
 
         {/* Fixed centre marker — the customer moves the MAP underneath it */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-full">
