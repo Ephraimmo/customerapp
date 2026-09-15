@@ -172,14 +172,14 @@ export function DishSheet({
                     key={s.id}
                     type="button"
                     onClick={() => setSizeId(s.id)}
-                    className={`flex h-12 items-center justify-between rounded-2xl px-4 text-sm font-bold ring-1 transition-colors cursor-pointer ${
+                    className={`flex min-h-12 items-center justify-between gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold ring-1 transition-colors cursor-pointer [&:nth-child(odd):last-child]:col-span-2 ${
                       sizeId === s.id
                         ? "bg-primary/10 text-primary ring-primary/30"
                         : "bg-secondary ring-border hover:bg-secondary/80"
                     }`}
                   >
-                    {s.label}
-                    <span className="font-mono text-xs">
+                    <span className="min-w-0 text-left leading-snug">{s.label}</span>
+                    <span className="shrink-0 whitespace-nowrap font-mono text-xs">
                       {s.delta === 0 ? "—" : `${s.delta > 0 ? "+" : "-"}${money(Math.abs(s.delta))}`}
                     </span>
                   </button>
@@ -197,14 +197,14 @@ export function DishSheet({
                       type="button"
                       onClick={() => setExtraIds((prev) => toggle(prev, e.id))}
                       aria-pressed={extraIds.includes(e.id)}
-                      className={`flex h-12 w-full items-center justify-between rounded-2xl px-4 text-sm font-semibold ring-1 transition-colors cursor-pointer ${
+                      className={`flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold ring-1 transition-colors cursor-pointer ${
                         extraIds.includes(e.id)
                           ? "bg-primary/10 text-primary ring-primary/30"
                           : "bg-secondary ring-border hover:bg-secondary/80"
                       }`}
                     >
-                      {e.label}
-                      <span className="font-mono text-xs">+{money(e.price)}</span>
+                      <span className="min-w-0 text-left leading-snug">{e.label}</span>
+                      <span className="shrink-0 whitespace-nowrap font-mono text-xs">+{money(e.price)}</span>
                     </button>
                   ))}
                 </div>
