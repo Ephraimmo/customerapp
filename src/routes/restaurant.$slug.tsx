@@ -5,6 +5,7 @@ import {
   Bike,
   Clock,
   Compass,
+  Flame,
   Heart,
   MapPin,
   Sparkles,
@@ -461,7 +462,7 @@ function RestaurantPage() {
         {/* Dish List with Combo & Bundle Badges (§8 of Integration Guide) */}
         <section className="px-4 pt-6">
           <h2 className="mb-4 text-lg font-black tracking-tight">{currentCategory}</h2>
-          <ul className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {visible.map((dish) => {
               // Match active combo deals containing this dish
               const matchingCombo = combos.find(
@@ -475,19 +476,19 @@ function RestaurantPage() {
                   <button
                     type="button"
                     onClick={() => setSheetDish(dish)}
-                    className="relative flex w-full items-center gap-4 rounded-3xl bg-card p-3 text-left ring-1 ring-border transition-transform active:scale-[0.99] cursor-pointer hover:bg-card/90"
+                    className="group flex w-full items-start gap-4 rounded-3xl bg-card p-3 text-left ring-1 ring-border transition-all cursor-pointer hover:-translate-y-0.5 hover:ring-primary/30 hover:shadow-lg hover:shadow-foreground/5 active:scale-[0.99] active:translate-y-0"
                   >
-                    <div className="relative size-20 shrink-0">
+                    <div className="relative size-24 shrink-0 overflow-hidden rounded-2xl bg-secondary">
                       <img
                         src={dish.image}
                         alt={dish.name}
                         width={1024}
                         height={640}
                         loading="lazy"
-                        className="size-full rounded-2xl object-cover"
+                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                       {matchingCombo ? (
-                        <span className="absolute -top-1.5 -left-1.5 rounded-md bg-primary px-1.5 py-0.5 text-[8px] font-black tracking-wider uppercase text-primary-foreground shadow-md">
+                        <span className="absolute top-1.5 left-1.5 rounded-md bg-primary px-1.5 py-0.5 text-[8px] font-black tracking-wider uppercase text-primary-foreground shadow-md">
                           {matchingCombo.kind === "multibuy"
                             ? `${matchingCombo.buy_qty} for ${matchingCombo.pay_qty}`
                             : "Bundle Deal"}
@@ -495,19 +496,36 @@ function RestaurantPage() {
                       ) : null}
                     </div>
 
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-base leading-tight font-bold">{dish.name}</span>
-                      <span className="mt-1 line-clamp-2 block text-xs text-muted-foreground">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5 self-stretch py-0.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0 text-base leading-tight font-bold">
+                          {dish.name}
+                        </span>
+                        <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-bold ring-1 ring-border">
+                          {money(dish.price)}
+                        </span>
+                      </div>
+
+                      <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                         {dish.description}
                       </span>
-                      <span className="label-mono mt-2 block text-muted-foreground">
-                        {dish.prepMinutes} min • {dish.calories} kcal
-                        {dish.diet ? ` • ${dish.diet.toUpperCase()}` : ""}
+
+                      <span className="label-mono mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5 text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="size-3" aria-hidden />
+                          {dish.prepMinutes} min
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Flame className="size-3" aria-hidden />
+                          {dish.calories} kcal
+                        </span>
+                        {dish.diet ? (
+                          <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] font-black tracking-wider text-emerald-600 dark:text-emerald-400">
+                            {dish.diet.toUpperCase()}
+                          </span>
+                        ) : null}
                       </span>
-                    </span>
-                    <span className="shrink-0 font-mono text-sm font-bold">
-                      {money(dish.price)}
-                    </span>
+                    </div>
                   </button>
                 </li>
               );
