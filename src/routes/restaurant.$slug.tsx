@@ -472,11 +472,11 @@ function RestaurantPage() {
               );
 
               return (
-                <li key={dish.id}>
+                <li key={dish.id} className="h-full">
                   <button
                     type="button"
                     onClick={() => setSheetDish(dish)}
-                    className="group flex w-full items-start gap-4 rounded-3xl bg-card p-3 text-left ring-1 ring-border transition-all cursor-pointer hover:-translate-y-0.5 hover:ring-primary/30 hover:shadow-lg hover:shadow-foreground/5 active:scale-[0.99] active:translate-y-0"
+                    className="group flex h-full w-full items-start gap-4 rounded-3xl bg-card p-3 text-left ring-1 ring-border transition-all cursor-pointer hover:-translate-y-0.5 hover:ring-primary/30 hover:shadow-lg hover:shadow-foreground/5 active:scale-[0.99] active:translate-y-0"
                   >
                     <div className="relative size-24 shrink-0 overflow-hidden rounded-2xl bg-secondary">
                       <img
