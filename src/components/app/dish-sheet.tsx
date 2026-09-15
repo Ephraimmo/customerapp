@@ -139,7 +139,7 @@ export function DishSheet({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pt-5 pb-40">
+          <div className="no-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-5 pt-5 pb-40">
             {/* Friendly conflict reminder banner if user currently has items from another kitchen */}
             {isConflict && (
               <div className="rounded-2xl bg-amber-500/10 p-3.5 border border-amber-500/25 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300">
