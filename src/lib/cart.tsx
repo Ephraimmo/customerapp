@@ -202,6 +202,44 @@ type StoredCart = {
   wantsToRedeemPoints?: boolean;
 };
 
+const EMPTY_CART: StoredCart = {
+  lines: [],
+  tip: 0,
+  couponCode: null,
+  mode: "delivery",
+  wantsToRedeemPoints: false,
+};
+
+// Local storage is namespaced per signed-in user (or "guest") so that logging
+// out and a different person logging in on the same device/browser never
+// shows the previous person's cart, placed-order ids, or history.
+function cartStorageKey(identityKey: string) {
+  return `${CART_KEY}.${identityKey}`;
+}
+function placedOrdersStorageKey(identityKey: string) {
+  return `${PLACED_ORDERS_KEY}.${identityKey}`;
+}
+
+/** Reads the cart for this identity, falling back to the pre-namespacing shared
+ * key for guests only so existing guest sessions don't lose their cart. */
+function readCartForIdentity(identityKey: string): StoredCart {
+  const scoped = read<StoredCart | null>(cartStorageKey(identityKey), null);
+  if (scoped) return scoped;
+  if (identityKey === "guest") {
+    const legacy = read<StoredCart | null>(CART_KEY, null);
+    if (legacy) return legacy;
+  }
+  return EMPTY_CART;
+}
+
+/** Reads placed-order ids for this identity, with the same guest fallback. */
+function readPlacedOrdersForIdentity(identityKey: string): string[] {
+  const scoped = read<string[] | null>(placedOrdersStorageKey(identityKey), null);
+  if (scoped) return scoped;
+  if (identityKey === "guest") return read<string[]>(PLACED_ORDERS_KEY, []);
+  return [];
+}
+
 function cartPath(uid: string) {
   return `customerCarts/${uid}`;
 }
@@ -248,6 +286,9 @@ function read<T>(key: string, fallback: T): T {
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user, hydrated: authHydrated } = useAuth();
   const { activeLocation, gpsCoordinates } = useLocation();
+  // Identity that local storage is scoped under — switches between "guest" and
+  // a uid whenever someone logs in or out, so cached data never leaks across accounts.
+  const identityKey = user?.uid ?? "guest";
 
   // Promotions & Loyalty Real-time Data
   const campaigns = usePromoCampaigns();
@@ -273,23 +314,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
 
-  // Initialize from local storage
+  // (Re)initialize from local storage whenever the signed-in identity changes,
+  // so a fresh login never inherits the previous account's (or guest's) cart,
+  // placed-order ids, or in-memory order history cached from Firebase.
   useEffect(() => {
-    const cart = read<StoredCart>(CART_KEY, {
-      lines: [],
-      tip: 0,
-      couponCode: null,
-      mode: "delivery",
-      wantsToRedeemPoints: false,
-    });
+    const cart = readCartForIdentity(identityKey);
     setLines(cart.lines ?? []);
     setTip(cart.tip ?? 0);
     setCouponCode(cart.couponCode ?? null);
-    if (cart.mode) setMode(cart.mode);
-    if (cart.wantsToRedeemPoints) setWantsToRedeemPoints(cart.wantsToRedeemPoints);
-    setPlacedOrderIds(read<string[]>(PLACED_ORDERS_KEY, []));
+    setMode(cart.mode ?? "delivery");
+    setWantsToRedeemPoints(cart.wantsToRedeemPoints ?? false);
+    setPlacedOrderIds(readPlacedOrdersForIdentity(identityKey));
+    setFirebaseOrders({});
     setHydrated(true);
-  }, []);
+  }, [identityKey]);
 
   // Fetch / subscribe to customer loyalty wallet
   useEffect(() => {
@@ -411,20 +449,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
     };
   }, [user, hydrated, authHydrated]);
 
-  // Persist cart to localStorage
+  // Persist cart to localStorage, scoped to the current identity
   useEffect(() => {
     if (!hydrated) return;
     window.localStorage.setItem(
-      CART_KEY,
+      cartStorageKey(identityKey),
       JSON.stringify({ lines, tip, couponCode, mode, wantsToRedeemPoints }),
     );
-  }, [lines, tip, couponCode, mode, wantsToRedeemPoints, hydrated]);
+  }, [lines, tip, couponCode, mode, wantsToRedeemPoints, hydrated, identityKey]);
 
-  // Persist placed orders IDs to localStorage
+  // Persist placed order IDs to localStorage, scoped to the current identity
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(PLACED_ORDERS_KEY, JSON.stringify(placedOrderIds));
-  }, [placedOrderIds, hydrated]);
+    window.localStorage.setItem(placedOrdersStorageKey(identityKey), JSON.stringify(placedOrderIds));
+  }, [placedOrderIds, hydrated, identityKey]);
 
   // Mirror cart to user's Firebase cart document when signed in
   useEffect(() => {

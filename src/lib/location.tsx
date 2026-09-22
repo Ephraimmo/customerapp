@@ -103,6 +103,16 @@ export const INITIAL_SAVED_LOCATIONS: SavedLocation[] = [];
 const LOCATIONS_STORAGE_KEY = "hearth.saved_locations.v3";
 const ACTIVE_LOCATION_ID_KEY = "hearth.active_location_id.v3";
 
+// Local storage is namespaced per signed-in user (or "guest") so logging out
+// and a different person logging in on the same device never shows the
+// previous person's saved addresses.
+function locationsStorageKey(identityKey: string) {
+  return `${LOCATIONS_STORAGE_KEY}.${identityKey}`;
+}
+function activeLocationIdStorageKey(identityKey: string) {
+  return `${ACTIVE_LOCATION_ID_KEY}.${identityKey}`;
+}
+
 
 interface LocationContextType {
   locations: SavedLocation[];
@@ -210,6 +220,9 @@ function locationFromCoordinates(
 
 export function LocationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  // Identity that local storage is scoped under — switches between "guest" and
+  // a uid whenever someone logs in or out.
+  const identityKey = user?.uid ?? "guest";
   const [locations, setLocations] = useState<SavedLocation[]>([]);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState<LocationSelectionMode>("saved");
@@ -220,10 +233,17 @@ export function LocationProvider({ children }: { children: ReactNode }) {
   const [syncing, setSyncing] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // Initialize from local cache (migrating away from demo locations)
+  // (Re)initialize from local cache whenever the signed-in identity changes, so
+  // a fresh login never inherits the previous account's (or guest's) addresses.
   useEffect(() => {
+    setLocations([]);
+    setActiveLocationId(null);
     try {
-      const raw = window.localStorage.getItem(LOCATIONS_STORAGE_KEY);
+      // Guests fall back to the pre-namespacing shared key so existing guest
+      // sessions don't lose their saved addresses.
+      const raw =
+        window.localStorage.getItem(locationsStorageKey(identityKey)) ??
+        (identityKey === "guest" ? window.localStorage.getItem(LOCATIONS_STORAGE_KEY) : null);
       if (raw) {
         const parsed = JSON.parse(raw) as SavedLocation[];
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -232,7 +252,9 @@ export function LocationProvider({ children }: { children: ReactNode }) {
           setLocations(real);
         }
       }
-      const rawActive = window.localStorage.getItem(ACTIVE_LOCATION_ID_KEY);
+      const rawActive =
+        window.localStorage.getItem(activeLocationIdStorageKey(identityKey)) ??
+        (identityKey === "guest" ? window.localStorage.getItem(ACTIVE_LOCATION_ID_KEY) : null);
       if (rawActive && rawActive !== "loc_home" && rawActive !== "loc_work") {
         setActiveLocationId(rawActive);
       }
@@ -240,20 +262,20 @@ export function LocationProvider({ children }: { children: ReactNode }) {
       /* ignore storage errors */
     }
     setHydrated(true);
-  }, []);
+  }, [identityKey]);
 
-  // Save to local storage
+  // Save to local storage, scoped to the current identity
   useEffect(() => {
     if (!hydrated) return;
     try {
-      window.localStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(locations));
+      window.localStorage.setItem(locationsStorageKey(identityKey), JSON.stringify(locations));
       if (activeLocationId) {
-        window.localStorage.setItem(ACTIVE_LOCATION_ID_KEY, activeLocationId);
+        window.localStorage.setItem(activeLocationIdStorageKey(identityKey), activeLocationId);
       }
     } catch {
       /* storage quota */
     }
-  }, [locations, activeLocationId, hydrated]);
+  }, [locations, activeLocationId, hydrated, identityKey]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
