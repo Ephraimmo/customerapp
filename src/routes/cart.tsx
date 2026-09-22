@@ -2,13 +2,15 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   ArrowLeft,
+  ArrowRight,
   Bike,
-  Compass,
-  Gift,
   MapPin,
   Minus,
   Plus,
+  ShieldCheck,
+  ShoppingBag,
   Sparkles,
+  Store,
   Tag,
   Trash2,
   User,
@@ -18,8 +20,21 @@ import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "@/lib/location";
 import { getRestaurant, money } from "@/lib/data";
+import { cn } from "@/lib/utils";
 import { LocationSelectorDialog } from "@/components/app/location-selector-dialog";
 import { AuthDialog } from "@/components/app/auth-dialog";
+import {
+  ActionBar,
+  ActionBarTotal,
+  Callout,
+  CheckoutProgress,
+  ConfirmDialog,
+  PageShell,
+  Panel,
+  SectionLabel,
+  StatCell,
+  SummaryRow,
+} from "@/components/app/checkout-ui";
 
 export const Route = createFileRoute("/cart")({
   head: () => ({
@@ -42,6 +57,11 @@ export const Route = createFileRoute("/cart")({
 
 const tipOptions = [0, 10, 20, 35];
 
+const fulfilmentOptions = [
+  { id: "delivery", label: "Delivery", icon: Bike },
+  { id: "pickup", label: "Pickup", icon: Store },
+] as const;
+
 function CartPage() {
   const navigate = useNavigate();
   const {
@@ -54,6 +74,7 @@ function CartPage() {
     setMode,
     quote,
     totals,
+    itemCount,
     comboSavings,
     comboDiscount,
     couponDiscount,
@@ -81,6 +102,9 @@ function CartPage() {
 
   const restaurant = restaurantSlug ? getRestaurant(restaurantSlug) : undefined;
   const isOutOfRange = mode === "delivery" && !quote.isWithinRange;
+  const needsAddress = mode === "delivery" && !activeLocation;
+  const canProceed = needsAddress || canCheckout;
+  const totalSavings = comboDiscount + couponDiscount + pointsDiscount;
 
   function handleApplyCoupon(e: React.FormEvent) {
     e.preventDefault();
@@ -96,7 +120,7 @@ function CartPage() {
 
   function handleCheckoutClick() {
     // 1. If in delivery mode and user has no delivery address, show reminder popup
-    if (mode === "delivery" && !activeLocation) {
+    if (needsAddress) {
       setShowAddressReminderModal(true);
       return;
     }
@@ -112,123 +136,148 @@ function CartPage() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-2xl">
-      <header className="sticky top-0 z-40 md:static flex items-center justify-between border-b border-border bg-background/90 px-4 py-4 backdrop-blur-md">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link
-            to="/"
-            aria-label="Back to discover"
-            className="grid size-11 place-items-center rounded-full bg-secondary ring-1 ring-border cursor-pointer shrink-0"
-          >
-            <ArrowLeft className="size-4" aria-hidden />
-          </Link>
-          <div className="min-w-0">
-            <h1 className="text-lg leading-none font-black tracking-tight">Your cart</h1>
-            <p className="label-mono mt-1 text-muted-foreground truncate">
-              {syncing ? "Loading saved cart…" : restaurant ? restaurant.name : "Empty"}
-            </p>
+    <PageShell>
+      <header className="sticky top-0 z-40 border-b border-border bg-background/90 px-4 pt-4 pb-3 backdrop-blur-md md:static">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Link
+              to="/"
+              aria-label="Back to discover"
+              className="grid size-10 shrink-0 cursor-pointer place-items-center rounded-full border border-border bg-secondary transition-colors hover:bg-secondary/70"
+            >
+              <ArrowLeft className="size-4" aria-hidden />
+            </Link>
+            <div className="min-w-0">
+              <h1 className="truncate text-lg leading-none font-black tracking-tight">Your cart</h1>
+              <p className="label-mono mt-1.5 truncate text-muted-foreground">
+                {syncing ? "Loading saved cart…" : restaurant ? restaurant.name : "Empty"}
+              </p>
+            </div>
           </div>
+
+          {lines.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowClearCartModal(true)}
+              className="flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg px-2.5 text-xs font-bold text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" aria-hidden />
+              Clear
+            </button>
+          ) : null}
         </div>
 
-        {lines.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setShowClearCartModal(true)}
-            className="flex items-center gap-1 text-xs font-bold text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded-lg hover:bg-secondary cursor-pointer"
-          >
-            <Trash2 className="size-3.5" />
-            <span>Clear</span>
-          </button>
-        ) : null}
+        {lines.length > 0 ? <CheckoutProgress current="cart" className="mt-4" /> : null}
       </header>
 
-      <div className="px-4 pt-4">
-        {storage === "cloud" && user ? (
-          <p className="rounded-2xl bg-primary/10 px-4 py-3 text-xs font-bold text-primary ring-1 ring-primary/20">
-            Saved to {user.name}'s account — sign out and back in and it'll still be here.
-          </p>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setOpenAuthDialog(true)}
-            className="flex items-center justify-between w-full rounded-2xl bg-secondary hover:bg-secondary/80 px-4 py-3 text-xs font-bold ring-1 ring-border text-left cursor-pointer transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <User className="size-4 text-primary" />
-              <span>Ordering as Guest • Sign in or Register to save cart & earn points</span>
-            </div>
-            <span className="text-primary font-bold">Sign In →</span>
-          </button>
-        )}
-      </div>
-
       {lines.length === 0 ? (
-        <main className="px-4 py-16 text-center">
-          <p className="text-2xl font-black tracking-tight">Nothing here yet</p>
-          <p className="mt-2 text-sm text-muted-foreground">
+        <main className="px-4 py-20 text-center">
+          <div className="mx-auto grid size-16 place-items-center rounded-2xl border border-border bg-secondary">
+            <ShoppingBag className="size-7 text-muted-foreground" aria-hidden />
+          </div>
+          <h2 className="mt-5 text-xl font-black tracking-tight">Your cart is empty</h2>
+          <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">
             Browse nearby kitchens and your cart will fill up fast.
           </p>
           <Link
             to="/"
-            className="mt-6 inline-flex h-14 items-center justify-center rounded-2xl bg-primary px-8 text-sm font-black tracking-[0.1em] text-primary-foreground uppercase cursor-pointer"
+            className="mt-6 inline-flex h-12 cursor-pointer items-center justify-center rounded-xl bg-primary px-7 text-xs font-black tracking-[0.1em] text-primary-foreground uppercase shadow-lg shadow-primary/25 transition-colors hover:bg-primary/90"
           >
             Find food
           </Link>
         </main>
       ) : (
-        <main className="space-y-6 px-4 pt-6 pb-44 md:pb-24">
-          {/* 1. How would you like it? (Delivery vs Pickup) */}
-          <section className="space-y-2">
-            <h2 className="label-mono text-muted-foreground">How would you like it?</h2>
-            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-secondary p-1 ring-1 ring-border">
-              <button
-                type="button"
-                onClick={() => setMode("delivery")}
-                className={`flex h-11 items-center justify-center gap-2 rounded-xl text-xs font-black tracking-wider uppercase transition-all cursor-pointer ${
-                  mode === "delivery"
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Bike className="size-4" />
-                Delivery
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("pickup")}
-                className={`flex h-11 items-center justify-center gap-2 rounded-xl text-xs font-black tracking-wider uppercase transition-all cursor-pointer ${
-                  mode === "pickup"
-                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <MapPin className="size-4" />
-                Pickup
-              </button>
+        <main className="space-y-5 px-4 pt-5 pb-40">
+          {/* Where the cart lives — signed in or guest */}
+          {storage === "cloud" && user ? (
+            <div className="flex items-center gap-2.5 rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-2.5">
+              <ShieldCheck className="size-4 shrink-0 text-primary" aria-hidden />
+              <p className="text-xs text-muted-foreground">
+                Saved to <span className="font-bold text-foreground">{user.name}</span>'s account —
+                it'll still be here next time you sign in.
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpenAuthDialog(true)}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-3 text-left shadow-sm transition-colors hover:bg-secondary/40"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                <User className="size-4" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-bold">Ordering as a guest</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  Sign in to save your cart and earn points
+                </span>
+              </span>
+              <span className="shrink-0 text-xs font-black text-primary">Sign in</span>
+            </button>
+          )}
+
+          {/* 1. Delivery or pickup */}
+          <section>
+            <SectionLabel>Fulfilment</SectionLabel>
+            <div
+              role="group"
+              aria-label="Fulfilment method"
+              className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-secondary p-1"
+            >
+              {fulfilmentOptions.map(({ id, label, icon: Icon }) => {
+                const active = mode === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMode(id)}
+                    aria-pressed={active}
+                    className={cn(
+                      "flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg text-xs font-black tracking-wider uppercase transition-all",
+                      active
+                        ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon
+                      className={cn("size-4", active ? "text-primary" : "text-current")}
+                      aria-hidden
+                    />
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </section>
 
-          {/* 2. Selected Delivery Address Card & Live Quote */}
+          {/* 2. Destination and live quote */}
           {mode === "delivery" ? (
             <section className="space-y-2">
-              <div className="rounded-2xl bg-secondary/80 p-4 ring-1 ring-border">
-                <div className="flex items-center justify-between">
-                  <span className="label-mono text-[11px] text-muted-foreground">Deliver to:</span>
-                  <button
-                    type="button"
-                    onClick={() => setOpenLocationDialog(true)}
-                    className="text-xs font-bold text-primary hover:underline cursor-pointer"
-                  >
-                    Change
-                  </button>
-                </div>
+              <SectionLabel
+                action={
+                  activeLocation ? (
+                    <button
+                      type="button"
+                      onClick={() => setOpenLocationDialog(true)}
+                      className="cursor-pointer text-xs font-bold text-primary hover:underline"
+                    >
+                      Change
+                    </button>
+                  ) : undefined
+                }
+              >
+                Deliver to
+              </SectionLabel>
 
+              <Panel className="p-4">
                 {activeLocation ? (
-                  <div className="mt-1 flex items-start gap-2.5">
-                    <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-bold text-foreground">{activeLocation.label}</p>
-                      <p className="text-xs text-muted-foreground">
+                  <div className="flex items-start gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                      <MapPin className="size-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold">{activeLocation.label}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         {activeLocation.street}, {activeLocation.city}
                       </p>
                     </div>
@@ -237,421 +286,442 @@ function CartPage() {
                   <button
                     type="button"
                     onClick={() => setOpenLocationDialog(true)}
-                    className="mt-2 text-xs font-bold text-primary underline cursor-pointer"
+                    className="flex w-full cursor-pointer items-start gap-3 text-left"
                   >
-                    Add a delivery address to see fees →
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                      <Plus className="size-4" aria-hidden />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold text-primary">
+                        Add a delivery address
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Needed to confirm your fee and arrival time
+                      </span>
+                    </span>
                   </button>
                 )}
 
-                {/* Live Distance & Tier Quote Row */}
-                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-xs">
-                  <div>
-                    <span className="text-muted-foreground block text-[10px]">Distance</span>
-                    <span className="font-bold font-mono">
-                      {quote.distanceKm != null ? `${quote.distanceKm.toFixed(1)} km` : "1.8 km"}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[10px]">Delivery Fee</span>
-                    <span
-                      className={`font-bold font-mono ${
-                        isOutOfRange
-                          ? "text-destructive line-through"
-                          : quote.fee === 0
-                            ? "text-emerald-600 font-black"
-                            : "text-foreground"
-                      }`}
-                    >
-                      {isOutOfRange ? "Out of range" : quote.fee === 0 ? "Free" : money(quote.fee)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground block text-[10px]">
-                      Estimated Arrival
-                    </span>
-                    <span className="font-bold">~{deliveryEtaMinutes} min</span>
-                  </div>
-                </div>
-              </div>
+                <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3.5">
+                  <StatCell
+                    label="Distance"
+                    value={quote.distanceKm != null ? `${quote.distanceKm.toFixed(1)} km` : "—"}
+                  />
+                  <StatCell
+                    label="Delivery fee"
+                    value={
+                      isOutOfRange ? "Out of range" : quote.fee === 0 ? "Free" : money(quote.fee)
+                    }
+                    tone={isOutOfRange ? "negative" : quote.fee === 0 ? "positive" : undefined}
+                  />
+                  <StatCell label="Arrival" value={`~${deliveryEtaMinutes} min`} />
+                </dl>
+              </Panel>
 
-              {/* Out of Range Callout */}
               {isOutOfRange && quote.distanceKm != null ? (
-                <div className="rounded-2xl bg-destructive/10 p-4 ring-1 ring-destructive/30 text-xs">
-                  <p className="font-bold text-destructive">
-                    📍 This address is {quote.distanceKm.toFixed(1)} km away, but this kitchen only
-                    delivers up to {restaurant?.delivery_radius_km ?? 20} km.
-                  </p>
-                  <p className="mt-1 text-muted-foreground">
-                    Choose pickup or switch to a closer delivery location to proceed.
-                  </p>
-                </div>
+                <Callout
+                  tone="danger"
+                  icon={<MapPin className="size-4" aria-hidden />}
+                  title={`${quote.distanceKm.toFixed(1)} km is outside this kitchen's range`}
+                >
+                  They deliver up to {restaurant?.delivery_radius_km ?? 20} km. Switch to pickup or
+                  choose a closer address to continue.
+                </Callout>
               ) : null}
             </section>
           ) : (
-            <section className="rounded-2xl bg-secondary/80 p-4 ring-1 ring-border text-xs space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="label-mono text-muted-foreground">Pickup from kitchen:</span>
-                <span className="font-mono text-primary font-bold">
-                  {quote.distanceKm != null
-                    ? `${quote.distanceKm.toFixed(1)} km away`
-                    : "1.8 km away"}
-                </span>
-              </div>
-              <p className="text-sm font-bold text-foreground">
-                {restaurant?.address || "Kitchen Location"}
-              </p>
-              <p className="text-muted-foreground">
-                Ready for pickup in ~{deliveryEtaMinutes} minutes. No delivery fee charged.
-              </p>
+            <section>
+              <SectionLabel>Collect from</SectionLabel>
+              <Panel className="p-4">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                    <Store className="size-4" aria-hidden />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">
+                      {restaurant?.name ?? "Kitchen location"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {restaurant?.address || "Kitchen location"}
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3.5">
+                  <StatCell
+                    label="Distance"
+                    value={quote.distanceKm != null ? `${quote.distanceKm.toFixed(1)} km` : "—"}
+                  />
+                  <StatCell label="Delivery fee" value="None" tone="positive" />
+                  <StatCell label="Ready in" value={`~${deliveryEtaMinutes} min`} />
+                </dl>
+              </Panel>
             </section>
           )}
 
-          {/* 3. Items List with Kitchen Attribution and Add More Link */}
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h2 className="label-mono text-muted-foreground">
-                Items from {restaurant ? restaurant.name : "Kitchen"}
-              </h2>
-              {restaurant ? (
-                <Link
-                  to="/restaurant/$slug"
-                  params={{ slug: restaurant.slug }}
-                  className="text-xs font-bold text-primary hover:underline cursor-pointer"
-                >
-                  + Add more items
-                </Link>
-              ) : null}
-            </div>
+          {/* 3. The items */}
+          <section>
+            <SectionLabel
+              action={
+                restaurant ? (
+                  <Link
+                    to="/restaurant/$slug"
+                    params={{ slug: restaurant.slug }}
+                    className="cursor-pointer text-xs font-bold text-primary hover:underline"
+                  >
+                    Add more
+                  </Link>
+                ) : undefined
+              }
+            >
+              {itemCount} {itemCount === 1 ? "item" : "items"}
+              {restaurant ? ` from ${restaurant.name}` : ""}
+            </SectionLabel>
 
-            <ul className="space-y-3">
-              {lines.map((line) => (
-                <li
-                  key={line.lineId}
-                  className="flex gap-3 rounded-3xl bg-card p-3 ring-1 ring-border"
-                >
-                  <img
-                    src={line.image}
-                    alt={line.name}
-                    width={1024}
-                    height={640}
-                    loading="lazy"
-                    className="size-20 shrink-0 rounded-2xl object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm leading-tight font-bold">{line.name}</p>
-                    <p className="label-mono mt-1 text-muted-foreground">
-                      {line.sizeLabel}
-                      {line.extras.length ? ` • ${line.extras.join(", ")}` : ""}
-                    </p>
-                    {line.removed.length ? (
-                      <p className="label-mono mt-1 text-destructive">No {line.removed.join(", ")}</p>
-                    ) : null}
-                    {line.notes ? (
-                      <p className="mt-1 text-xs text-muted-foreground italic">“{line.notes}”</p>
-                    ) : null}
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-1 rounded-xl bg-secondary px-1 ring-1 ring-border">
-                        <button
-                          type="button"
-                          onClick={() => setQty(line.lineId, line.qty - 1)}
-                          aria-label={`Decrease ${line.name}`}
-                          className="grid size-9 place-items-center rounded-lg cursor-pointer"
-                        >
-                          <Minus className="size-3.5" aria-hidden />
-                        </button>
-                        <span className="w-5 text-center font-mono text-sm font-bold">
-                          {line.qty}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setQty(line.lineId, line.qty + 1)}
-                          aria-label={`Increase ${line.name}`}
-                          className="grid size-9 place-items-center rounded-lg cursor-pointer"
-                        >
-                          <Plus className="size-3.5" aria-hidden />
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono text-sm font-bold">
+            <Panel>
+              <ul className="divide-y divide-border">
+                {lines.map((line) => (
+                  <li key={line.lineId} className="flex gap-3 p-3.5">
+                    <img
+                      src={line.image}
+                      alt={line.name}
+                      width={1024}
+                      height={640}
+                      loading="lazy"
+                      className="size-16 shrink-0 rounded-xl object-cover"
+                    />
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="min-w-0 text-sm leading-tight font-bold">{line.name}</p>
+                        <span className="shrink-0 font-mono text-sm font-bold tabular-nums">
                           {money(line.unitPrice * line.qty)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => removeLine(line.lineId)}
-                          aria-label={`Remove ${line.name}`}
-                          className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:text-destructive cursor-pointer"
-                        >
-                          <Trash2 className="size-4" aria-hidden />
-                        </button>
+                      </div>
+
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {line.sizeLabel}
+                        {line.extras.length ? ` · ${line.extras.join(", ")}` : ""}
+                      </p>
+                      {line.removed.length ? (
+                        <p className="mt-0.5 text-xs text-destructive">
+                          No {line.removed.join(", ")}
+                        </p>
+                      ) : null}
+                      {line.notes ? (
+                        <p className="mt-0.5 text-xs text-muted-foreground italic">
+                          “{line.notes}”
+                        </p>
+                      ) : null}
+
+                      <div className="mt-2.5 flex items-center justify-between gap-3">
+                        <div className="flex items-center rounded-lg border border-border bg-secondary">
+                          <button
+                            type="button"
+                            onClick={() => setQty(line.lineId, line.qty - 1)}
+                            aria-label={`Decrease ${line.name}`}
+                            className="grid size-8 cursor-pointer place-items-center rounded-l-lg text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <Minus className="size-3.5" aria-hidden />
+                          </button>
+                          <span className="w-7 text-center font-mono text-sm font-bold tabular-nums">
+                            {line.qty}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setQty(line.lineId, line.qty + 1)}
+                            aria-label={`Increase ${line.name}`}
+                            className="grid size-8 cursor-pointer place-items-center rounded-r-lg text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            <Plus className="size-3.5" aria-hidden />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+                            {money(line.unitPrice)} each
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeLine(line.lineId)}
+                            aria-label={`Remove ${line.name}`}
+                            className="grid size-8 cursor-pointer place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" aria-hidden />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
           </section>
 
-          {/* 4. Active Combo Savings Banner (§8 of Integration Guide) */}
+          {/* 4. Automatic combo and bundle savings */}
           {comboSavings.length > 0 ? (
-            <section className="rounded-2xl bg-emerald-500/10 p-4 border border-emerald-500/25 space-y-2">
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                <Sparkles className="size-4" />
-                <span>Automatic Combo & Bundle Savings Applied</span>
+            <section className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+                <Sparkles className="size-4 shrink-0" aria-hidden />
+                <h2 className="text-xs font-black tracking-wide uppercase">
+                  Bundle savings applied
+                </h2>
               </div>
-              <div className="space-y-1.5 text-xs">
+              <dl className="mt-2.5 space-y-1.5">
                 {comboSavings.map((combo) => (
                   <div
                     key={combo.comboId}
-                    className="flex justify-between items-center text-emerald-700 dark:text-emerald-300"
+                    className="flex items-baseline justify-between gap-3 text-xs"
                   >
-                    <span>
-                      {combo.name} {combo.timesApplied > 1 ? `(×${combo.timesApplied})` : ""}
-                    </span>
-                    <span className="font-mono font-bold">-{money(combo.discount)}</span>
+                    <dt className="min-w-0 truncate text-emerald-800 dark:text-emerald-300">
+                      {combo.name}
+                      {combo.timesApplied > 1 ? ` ×${combo.timesApplied}` : ""}
+                    </dt>
+                    <dd className="shrink-0 font-mono font-bold text-emerald-700 tabular-nums dark:text-emerald-400">
+                      -{money(combo.discount)}
+                    </dd>
                   </div>
                 ))}
-              </div>
+              </dl>
             </section>
           ) : null}
 
-          {/* 5. Promo Coupon Code */}
+          {/* 5. Promo code and courier tip */}
           <section>
-            <h2 className="label-mono mb-2 text-muted-foreground">Promo code</h2>
-            {couponCode ? (
-              <div className="flex h-12 items-center justify-between rounded-2xl bg-primary/10 px-4 ring-1 ring-primary/30">
+            <SectionLabel>Savings & extras</SectionLabel>
+            <Panel className="divide-y divide-border">
+              <div className="p-4">
                 <div className="flex items-center gap-2">
-                  <Tag className="size-4 text-primary" />
-                  <span className="font-mono text-sm font-bold text-primary">{couponCode}</span>
-                  {couponDiscount > 0 ? (
-                    <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      (-{money(couponDiscount)})
-                    </span>
-                  ) : isFreeDeliveryCoupon ? (
-                    <span className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                      (Free Delivery)
-                    </span>
-                  ) : null}
+                  <Tag className="size-3.5 text-primary" aria-hidden />
+                  <h3 className="text-xs font-bold">Promo code</h3>
                 </div>
-                <button
-                  type="button"
-                  onClick={removeCoupon}
-                  className="text-[11px] font-black tracking-widest uppercase cursor-pointer hover:underline"
-                >
-                  Remove
-                </button>
+
+                {couponCode ? (
+                  <div className="mt-2.5 flex items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2.5">
+                    <div className="flex min-w-0 items-baseline gap-2">
+                      <span className="font-mono text-sm font-black text-primary">
+                        {couponCode}
+                      </span>
+                      {couponDiscount > 0 ? (
+                        <span className="truncate font-mono text-xs font-bold text-emerald-600 tabular-nums dark:text-emerald-400">
+                          -{money(couponDiscount)}
+                        </span>
+                      ) : isFreeDeliveryCoupon ? (
+                        <span className="truncate text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                          Free delivery
+                        </span>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeCoupon}
+                      className="shrink-0 cursor-pointer text-[10px] font-black tracking-widest text-muted-foreground uppercase transition-colors hover:text-destructive"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleApplyCoupon} className="mt-2.5">
+                    <div className="flex gap-2">
+                      <input
+                        value={code}
+                        onChange={(e) => setCode(e.target.value)}
+                        aria-label="Promo code"
+                        placeholder="Enter code"
+                        maxLength={20}
+                        className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-secondary px-3.5 font-mono text-sm uppercase outline-none transition-shadow placeholder:font-sans placeholder:text-xs placeholder:tracking-normal placeholder:normal-case placeholder:text-muted-foreground focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!code.trim()}
+                        className="h-11 shrink-0 cursor-pointer rounded-lg bg-foreground px-5 text-[11px] font-black tracking-widest text-background uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                    {couponReason ? (
+                      <p className="mt-1.5 text-xs font-medium text-destructive">{couponReason}</p>
+                    ) : (
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        Try WELCOME20, HEARTH50 or FREEDELIVERY.
+                      </p>
+                    )}
+                  </form>
+                )}
               </div>
-            ) : (
-              <form onSubmit={handleApplyCoupon} className="space-y-1">
-                <div className="flex gap-2">
-                  <input
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    aria-label="Promo code"
-                    placeholder="e.g. WELCOME20, HEARTH50, FREEDELIVERY"
-                    maxLength={20}
-                    className="h-12 flex-1 rounded-2xl bg-secondary px-4 font-mono text-sm uppercase ring-1 ring-border outline-none focus:ring-2 focus:ring-primary/30"
+
+              {mode === "delivery" ? (
+                <div className="p-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <h3 className="text-xs font-bold">Tip your courier</h3>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">
+                      100% goes to the driver
+                    </span>
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="Courier tip"
+                    className="mt-2.5 grid grid-cols-4 gap-2"
+                  >
+                    {tipOptions.map((amount) => {
+                      const active = tip === amount;
+                      return (
+                        <button
+                          key={amount}
+                          type="button"
+                          onClick={() => setTip(amount)}
+                          aria-pressed={active}
+                          className={cn(
+                            "h-11 cursor-pointer rounded-lg border text-sm font-bold tabular-nums transition-all",
+                            active
+                              ? "border-primary bg-primary text-primary-foreground shadow-sm shadow-primary/20"
+                              : "border-border bg-secondary text-foreground hover:border-primary/30",
+                          )}
+                        >
+                          {amount === 0 ? "None" : `R ${amount}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </Panel>
+          </section>
+
+          {/* 6. Price breakdown */}
+          <section>
+            <SectionLabel>Payment summary</SectionLabel>
+            <Panel className="p-5">
+              <dl className="space-y-2.5">
+                <SummaryRow label="Subtotal" value={money(totals.subtotal)} />
+                {comboDiscount > 0 ? (
+                  <SummaryRow
+                    label="Combo & bundle savings"
+                    value={`-${money(comboDiscount)}`}
+                    positive
                   />
-                  <button
-                    type="submit"
-                    className="h-12 rounded-2xl bg-foreground px-5 text-[11px] font-black tracking-widest text-background uppercase cursor-pointer hover:bg-foreground/90 transition-colors"
-                  >
-                    Apply
-                  </button>
-                </div>
-                {couponReason ? (
-                  <p className="text-xs text-destructive mt-1 font-medium">{couponReason}</p>
                 ) : null}
-              </form>
-            )}
-          </section>
+                {couponCode ? (
+                  couponDiscount > 0 ? (
+                    <SummaryRow
+                      label={`Coupon (${couponCode})`}
+                      value={`-${money(couponDiscount)}`}
+                      positive
+                    />
+                  ) : isFreeDeliveryCoupon ? (
+                    <SummaryRow label={`Coupon (${couponCode})`} value="Free delivery" positive />
+                  ) : null
+                ) : null}
+                {pointsDiscount > 0 ? (
+                  <SummaryRow
+                    label="Loyalty points discount"
+                    value={`-${money(pointsDiscount)}`}
+                    positive
+                  />
+                ) : null}
+                {mode === "delivery" ? (
+                  <SummaryRow
+                    label="Delivery fee"
+                    value={totals.deliveryFee === 0 ? "Free" : money(totals.deliveryFee)}
+                    hint={
+                      quote.distanceKm != null ? `${quote.distanceKm.toFixed(1)} km` : undefined
+                    }
+                    positive={totals.deliveryFee === 0}
+                  />
+                ) : null}
+                <SummaryRow label="Service fee (5%)" value={money(totals.serviceFee)} />
+                {totals.tip > 0 ? (
+                  <SummaryRow label="Courier tip" value={money(totals.tip)} />
+                ) : null}
+              </dl>
 
-          {/* 6. Driver Tip (if delivery) */}
-          {mode === "delivery" ? (
-            <section>
-              <h2 className="label-mono mb-2 text-muted-foreground">Tip your courier</h2>
-              <div className="grid grid-cols-4 gap-2">
-                {tipOptions.map((amount) => (
-                  <button
-                    key={amount}
-                    type="button"
-                    onClick={() => setTip(amount)}
-                    aria-pressed={tip === amount}
-                    className={`h-12 rounded-2xl text-sm font-bold ring-1 cursor-pointer transition-all ${
-                      tip === amount
-                        ? "bg-primary text-primary-foreground ring-primary shadow-md shadow-primary/20"
-                        : "bg-secondary ring-border hover:bg-secondary/80"
-                    }`}
-                  >
-                    {amount === 0 ? "None" : money(amount)}
-                  </button>
-                ))}
+              <div className="mt-4 flex items-baseline justify-between gap-3 border-t border-dashed border-border pt-4">
+                <span className="text-xs font-black tracking-[0.18em] text-muted-foreground uppercase">
+                  Total
+                </span>
+                <span className="font-mono text-2xl leading-none font-black tabular-nums">
+                  {money(totals.total)}
+                </span>
               </div>
-            </section>
-          ) : null}
 
-          {/* 7. Full Tabular Price Breakdown */}
-          <section className="space-y-2 rounded-3xl bg-secondary p-5 ring-1 ring-border">
-            <h2 className="label-mono mb-1 text-muted-foreground">Price breakdown</h2>
-            <Row label="Subtotal" value={money(totals.subtotal)} />
-            {comboDiscount > 0 ? (
-              <Row label="Combo & Bundle savings" value={`-${money(comboDiscount)}`} accent />
-            ) : null}
-            {couponCode ? (
-              couponDiscount > 0 ? (
-                <Row label={`Coupon (${couponCode})`} value={`-${money(couponDiscount)}`} accent />
-              ) : isFreeDeliveryCoupon ? (
-                <Row label={`Coupon (${couponCode})`} value="Free Delivery" accent />
-              ) : null
-            ) : null}
-            {pointsDiscount > 0 ? (
-              <Row label="Loyalty Points discount" value={`-${money(pointsDiscount)}`} accent />
-            ) : null}
-            {mode === "delivery" ? (
-              <Row
-                label="Delivery fee"
-                value={totals.deliveryFee === 0 ? "Free" : money(totals.deliveryFee)}
-                subtext={
-                  quote.distanceKm != null
-                    ? `(${quote.distanceKm.toFixed(1)} km distance)`
-                    : undefined
-                }
-              />
-            ) : null}
-            <Row label="Service fee (5%)" value={money(totals.serviceFee)} />
-            {totals.tip > 0 ? <Row label="Courier tip" value={money(totals.tip)} /> : null}
-            <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-              <span className="text-base font-black tracking-widest uppercase">Total</span>
-              <span className="font-mono text-xl font-black text-emerald-600 dark:text-emerald-400">
-                {money(totals.total)}
-              </span>
-            </div>
+              {totalSavings > 0 ? (
+                <p className="mt-3 flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/10 py-2 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                  <Sparkles className="size-3.5" aria-hidden />
+                  You saved {money(totalSavings)} on this order
+                </p>
+              ) : null}
+            </Panel>
           </section>
+
+          <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground">
+            <ShieldCheck className="size-3.5 shrink-0" aria-hidden />
+            Secure checkout — you confirm payment on the next step.
+          </p>
         </main>
       )}
 
       {lines.length > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md md:max-w-2xl border-t border-border bg-background/95 px-4 pt-4 pb-7 backdrop-blur">
-          {mode === "delivery" && !activeLocation ? (
+        <ActionBar>
+          <ActionBarTotal
+            hint={`${itemCount} ${itemCount === 1 ? "item" : "items"} · incl. fees`}
+            value={money(totals.total)}
+          />
+          {canProceed ? (
             <button
               type="button"
               onClick={handleCheckoutClick}
-              className="flex h-16 w-full items-center justify-between rounded-3xl bg-primary px-6 text-primary-foreground shadow-2xl shadow-primary/30 transition-transform active:scale-[0.98] cursor-pointer hover:bg-primary/95"
+              className="flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-lg shadow-primary/30 transition-all hover:bg-primary/95 active:scale-[0.99]"
             >
-              <span className="text-sm font-black tracking-[0.1em] uppercase">
-                {user ? "Continue to Checkout" : "Sign In & Checkout"}
-              </span>
-              <span className="font-mono font-bold">{money(totals.total)}</span>
-            </button>
-          ) : canCheckout ? (
-            <button
-              type="button"
-              onClick={handleCheckoutClick}
-              className="flex h-16 w-full items-center justify-between rounded-3xl bg-primary px-6 text-primary-foreground shadow-2xl shadow-primary/30 transition-transform active:scale-[0.98] cursor-pointer hover:bg-primary/95"
-            >
-              <span className="text-sm font-black tracking-[0.1em] uppercase">
-                {user ? "Continue to Checkout" : "Sign In & Checkout"}
-              </span>
-              <span className="font-mono font-bold">{money(totals.total)}</span>
+              {user ? "Continue to checkout" : "Sign in & checkout"}
+              <ArrowRight className="size-4" aria-hidden />
             </button>
           ) : (
             <button
               type="button"
               disabled
-              className="flex h-16 w-full items-center justify-center rounded-3xl bg-secondary text-muted-foreground border border-border text-xs font-bold uppercase tracking-wider cursor-not-allowed opacity-70"
+              className="h-14 w-full cursor-not-allowed rounded-2xl border border-border bg-secondary text-xs font-bold tracking-wider text-muted-foreground uppercase"
             >
-              {isOutOfRange
-                ? "Delivery address out of range"
-                : "Checkout unavailable"}
+              {isOutOfRange ? "Address out of delivery range" : "Checkout unavailable"}
             </button>
           )}
-        </div>
+        </ActionBar>
       ) : null}
 
-      {/* Address Required Popup Message Modal */}
-      {showAddressReminderModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-[var(--animate-sheet-up)]">
-          <div className="relative w-full max-w-sm rounded-3xl bg-card p-6 border border-border shadow-2xl space-y-4 text-center">
-            <div className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary mx-auto ring-1 ring-primary/20">
-              <MapPin className="size-7" />
-            </div>
+      <ConfirmDialog
+        open={showAddressReminderModal}
+        onClose={() => setShowAddressReminderModal(false)}
+        onConfirm={() => {
+          setShowAddressReminderModal(false);
+          setOpenLocationDialog(true);
+        }}
+        icon={<MapPin className="size-6" aria-hidden />}
+        title="Delivery address required"
+        description="Add a delivery address before checkout so we can calculate your fee and find the closest kitchen branch."
+        cancelLabel="Not now"
+        confirmLabel="Add address"
+      />
 
-            <div className="space-y-1.5">
-              <h3 className="text-lg font-black text-foreground">Delivery Address Required</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Please add a delivery address before proceeding to checkout so we can calculate
-                delivery fees and find your closest kitchen branch.
-              </p>
-            </div>
-
-            <div className="pt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowAddressReminderModal(false)}
-                className="flex-1 h-11 rounded-xl bg-secondary text-xs font-bold text-muted-foreground hover:text-foreground border border-border cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddressReminderModal(false);
-                  setOpenLocationDialog(true);
-                }}
-                className="flex-1 h-11 rounded-xl bg-primary text-xs font-black uppercase tracking-wider text-primary-foreground shadow-md hover:bg-primary/90 transition-all cursor-pointer"
-              >
-                OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Clear Cart Confirmation Modal */}
-      {showClearCartModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md animate-[var(--animate-sheet-up)]">
-          <div className="relative w-full max-w-sm rounded-3xl bg-card p-6 border border-border shadow-2xl space-y-4 text-center">
-            <div className="grid size-14 place-items-center rounded-2xl bg-destructive/10 text-destructive mx-auto ring-1 ring-destructive/20">
-              <Trash2 className="size-7" />
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="text-lg font-black text-foreground">Clear entire cart?</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Are you sure you want to remove all {lines.length}{" "}
-                {lines.length === 1 ? "item" : "items"} from {restaurant?.name || "your cart"}?
-                This action cannot be undone.
-              </p>
-            </div>
-
-            <div className="pt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowClearCartModal(false)}
-                className="flex-1 h-11 rounded-xl bg-secondary text-xs font-bold text-muted-foreground hover:text-foreground border border-border cursor-pointer transition-colors"
-              >
-                Keep Items
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  clear();
-                  setShowClearCartModal(false);
-                  toast.success("Cart cleared");
-                }}
-                className="flex-1 h-11 rounded-xl bg-destructive text-xs font-black uppercase tracking-wider text-destructive-foreground shadow-md hover:bg-destructive/90 transition-all cursor-pointer"
-              >
-                Clear Cart
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showClearCartModal}
+        onClose={() => setShowClearCartModal(false)}
+        onConfirm={() => {
+          clear();
+          setShowClearCartModal(false);
+          toast.success("Cart cleared");
+        }}
+        tone="destructive"
+        icon={<Trash2 className="size-6" aria-hidden />}
+        title="Clear entire cart?"
+        description={`This removes all ${lines.length} ${lines.length === 1 ? "item" : "items"} from ${restaurant?.name || "your cart"}. This can't be undone.`}
+        cancelLabel="Keep items"
+        confirmLabel="Clear cart"
+      />
 
       <AuthDialog
         open={openAuthDialog}
         onClose={() => setOpenAuthDialog(false)}
         onSuccess={() => {
-          if (mode === "delivery" && !activeLocation) {
+          if (needsAddress) {
             setShowAddressReminderModal(true);
             return;
           }
@@ -665,32 +735,6 @@ function CartPage() {
         open={openLocationDialog}
         onClose={() => setOpenLocationDialog(false)}
       />
-    </div>
-  );
-}
-
-function Row({
-  label,
-  value,
-  subtext,
-  accent,
-}: {
-  label: string;
-  value: string;
-  subtext?: string | undefined;
-  accent?: boolean | undefined;
-}) {
-  return (
-    <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground flex items-center gap-1.5">
-        {label}
-        {subtext ? <span className="text-[10px] text-muted-foreground/80">{subtext}</span> : null}
-      </span>
-      <span
-        className={`font-mono font-bold ${accent ? "text-emerald-600 dark:text-emerald-400" : ""}`}
-      >
-        {value}
-      </span>
-    </div>
+    </PageShell>
   );
 }
