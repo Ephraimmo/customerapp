@@ -234,3 +234,31 @@
     font-size: 15px;
   }
 }
+
+/*
+ * Printing a receipt should yield the receipt, not the page behind it.
+ * The order receipt dialog marks its overlay, its surface and the chrome
+ * that must not reach paper.
+ */
+@media print {
+  [data-print-hidden="true"] {
+    display: none !important;
+  }
+
+  [data-print-root] {
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    background: none !important;
+    backdrop-filter: none !important;
+  }
+
+  [data-print-surface] {
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+}
