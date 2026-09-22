@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Bike,
@@ -8,10 +8,11 @@ import {
   Flame,
   Heart,
   MapPin,
+  Plus,
   Sparkles,
   Star,
   Store,
-  Tag,
+  UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
 import { CartBar } from "@/components/app/cart-bar";
@@ -29,6 +30,70 @@ import { useCart } from "@/lib/cart";
 import { quoteDelivery, restaurantOffersDelivery, restaurantOffersPickup } from "@/lib/pricing";
 import { haversineDistanceKm } from "@/lib/geo";
 import { selectBestBranch } from "@/lib/branch-selector";
+
+/** One cell of the header info bar. Keeps value/label baselines aligned
+ *  across tiles even when a tile carries a trailing action. */
+function StatTile({
+  icon,
+  value,
+  label,
+  action,
+}: {
+  icon: ReactNode;
+  value: ReactNode;
+  label: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div className="flex flex-col justify-between rounded-2xl bg-secondary p-3 ring-1 ring-border">
+      <span className="flex items-center gap-1.5 text-sm leading-tight font-black text-foreground">
+        {icon}
+        <span className="min-w-0 truncate">{value}</span>
+      </span>
+      <span className="mt-1.5 flex items-center justify-between gap-2">
+        <span className="label-mono min-w-0 truncate text-muted-foreground">{label}</span>
+        {action ? (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="label-mono shrink-0 cursor-pointer text-primary transition-opacity hover:opacity-70"
+          >
+            {action.label}
+          </button>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+/** Shown while the live menu is still resolving, so the page keeps its
+ *  shape instead of flashing a bare message. */
+function MenuSkeleton() {
+  return (
+    <div
+      aria-busy="true"
+      aria-label="Loading menu"
+      className="mx-auto min-h-screen w-full max-w-full animate-pulse bg-background sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl"
+    >
+      <div className="aspect-[16/10] w-full bg-secondary md:aspect-[21/9] md:max-h-[380px] md:rounded-b-[32px]" />
+      <div className="space-y-4 px-4 pt-5">
+        <div className="h-7 w-2/3 rounded-lg bg-secondary" />
+        <div className="h-4 w-1/2 rounded-lg bg-secondary" />
+        <div className="h-14 w-full rounded-2xl bg-secondary" />
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-16 rounded-2xl bg-secondary" />
+          ))}
+        </div>
+        <div className="grid gap-3 pt-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-[120px] rounded-3xl bg-secondary" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/restaurant/$slug")({
   head: ({ params }) => {
@@ -166,15 +231,21 @@ function RestaurantPage() {
   }, [restaurant, mode, branchSelection, quote.distanceKm]);
 
   if (!restaurant) {
+    if (loading) return <MenuSkeleton />;
+
     return (
-      <div className="mx-auto min-h-screen w-full max-w-md px-4 py-24 text-center md:max-w-3xl">
-        <p className="text-2xl font-black tracking-tight">
-          {loading ? "Loading menu…" : "Restaurant unavailable"}
-        </p>
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-4 py-24 text-center md:max-w-3xl">
+        <div className="grid size-16 place-items-center rounded-3xl bg-secondary text-muted-foreground ring-1 ring-border">
+          <UtensilsCrossed className="size-7" aria-hidden />
+        </div>
+        <p className="mt-5 text-2xl font-black tracking-tight">Restaurant unavailable</p>
         <p className="mt-2 text-sm text-muted-foreground">
-          {loading ? "Fetching the live menu." : "This kitchen isn't published right now."}
+          This kitchen isn't published right now.
         </p>
-        <Link to="/" className="mt-6 inline-block font-mono text-xs font-bold text-primary">
+        <Link
+          to="/"
+          className="mt-6 inline-flex h-11 items-center rounded-2xl bg-primary px-5 text-xs font-black tracking-wider text-primary-foreground uppercase transition-colors hover:bg-primary/90"
+        >
           Back to discover
         </Link>
       </div>
@@ -187,28 +258,45 @@ function RestaurantPage() {
       : (restaurant.categories?.[0] ?? "Menu");
 
   // Filter visible dishes with branch-level menu availability overlay (§19)
-  const visible = (
+  const availableDishes = (restaurant.dishes || []).filter((d) =>
+    isItemAvailable(d.id, d.is_available !== false),
+  );
+  const countFor = (cat: string) =>
+    cat === "Popular"
+      ? availableDishes.filter((d) => d.popular).length
+      : availableDishes.filter((d) => d.category === cat).length;
+
+  const visible =
     currentCategory === "Popular"
-      ? (restaurant.dishes || []).filter((d) => d.popular)
-      : (restaurant.dishes || []).filter((d) => d.category === currentCategory)
-  ).filter((d) => isItemAvailable(d.id, d.is_available !== false));
+      ? availableDishes.filter((d) => d.popular)
+      : availableDishes.filter((d) => d.category === currentCategory);
+
+  const hasReviews = (restaurant.reviewCount ?? 0) > 0;
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
       {/* Cover Image Header */}
       <div className="relative">
-        <img
-          src={restaurant.image}
-          alt={`${restaurant.name} kitchen`}
-          width={1024}
-          height={640}
-          className="aspect-[16/10] w-full object-cover md:aspect-[21/9] md:max-h-[380px] md:rounded-b-[32px]"
-        />
+        <div className="relative overflow-hidden bg-secondary md:rounded-b-[32px]">
+          <img
+            src={restaurant.image}
+            alt={`${restaurant.name} kitchen`}
+            width={1024}
+            height={640}
+            className="aspect-[16/10] w-full object-cover md:aspect-[21/9] md:max-h-[380px]"
+          />
+          {/* Softens the hard cut where the cover meets the page. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background to-transparent"
+          />
+        </div>
+
         <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
           <Link
             to="/"
             aria-label="Back to discover"
-            className="grid size-11 place-items-center rounded-full bg-background/90 ring-1 ring-border backdrop-blur cursor-pointer"
+            className="grid size-11 cursor-pointer place-items-center rounded-full bg-background/85 text-foreground shadow-sm ring-1 ring-border backdrop-blur-md transition-colors hover:bg-background"
           >
             <ArrowLeft className="size-4" aria-hidden />
           </Link>
@@ -217,10 +305,10 @@ function RestaurantPage() {
             onClick={() => setFavorite((v) => !v)}
             aria-label={favorite ? "Remove from favorites" : "Save to favorites"}
             aria-pressed={favorite}
-            className="grid size-11 place-items-center rounded-full bg-background/90 ring-1 ring-border backdrop-blur cursor-pointer"
+            className="grid size-11 cursor-pointer place-items-center rounded-full bg-background/85 text-foreground shadow-sm ring-1 ring-border backdrop-blur-md transition-colors hover:bg-background"
           >
             <Heart
-              className={`size-4 ${favorite ? "fill-primary text-primary" : ""}`}
+              className={`size-4 transition-transform ${favorite ? "scale-110 fill-primary text-primary" : ""}`}
               aria-hidden
             />
           </button>
@@ -267,32 +355,24 @@ function RestaurantPage() {
             </button>
           </div>
 
-          {/* Sticky 4-Stat Info Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div className="rounded-2xl bg-secondary p-3 ring-1 ring-border">
-              <span className="flex items-center gap-1 text-sm font-black text-foreground">
-                <Star className="size-3.5 fill-primary text-primary" aria-hidden />
-                {restaurant.rating}
-              </span>
-              <span className="label-mono text-[10px] text-muted-foreground">
-                {restaurant.reviewCount} reviews
-              </span>
-            </div>
+          {/* 4-Stat Info Bar */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <StatTile
+              icon={<Star className="size-3.5 shrink-0 fill-primary text-primary" aria-hidden />}
+              value={hasReviews ? restaurant.rating : "New"}
+              label={hasReviews ? `${restaurant.reviewCount} reviews` : "no reviews yet"}
+            />
 
-            <div className="rounded-2xl bg-secondary p-3 ring-1 ring-border">
-              <span className="flex items-center gap-1 text-sm font-black text-foreground">
-                <Clock className="size-3.5 text-primary" aria-hidden />
-                {etaMinutes[0]}–{etaMinutes[1]}
-              </span>
-              <span className="label-mono text-[10px] text-muted-foreground">
-                {mode === "pickup" ? "prep minutes" : "arrival minutes"}
-              </span>
-            </div>
+            <StatTile
+              icon={<Clock className="size-3.5 shrink-0 text-primary" aria-hidden />}
+              value={`${etaMinutes[0]}–${etaMinutes[1]}`}
+              label={mode === "pickup" ? "prep minutes" : "arrival minutes"}
+            />
 
-            <div className="rounded-2xl bg-secondary p-3 ring-1 ring-border">
-              <span className="flex items-center gap-1 text-sm font-black text-foreground">
-                <Bike className="size-3.5 text-primary" aria-hidden />
-                {mode === "pickup"
+            <StatTile
+              icon={<Bike className="size-3.5 shrink-0 text-primary" aria-hidden />}
+              value={
+                mode === "pickup"
                   ? "Free"
                   : isOutOfRange
                     ? "Out of range"
@@ -300,31 +380,17 @@ function RestaurantPage() {
                       ? "Pickup only"
                       : quote.fee === 0
                         ? "Free"
-                        : money(quote.fee)}
-              </span>
-              <span className="label-mono text-[10px] text-muted-foreground">
-                {mode === "pickup" ? "pickup order" : "delivery fee"}
-              </span>
-            </div>
+                        : money(quote.fee)
+              }
+              label={mode === "pickup" ? "pickup order" : "delivery fee"}
+            />
 
-            <div className="rounded-2xl bg-secondary p-3 ring-1 ring-border">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1 text-sm font-black text-foreground">
-                  <Compass className="size-3.5 text-primary" aria-hidden />
-                  {displayDistance}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setOpenLocationDialog(true)}
-                  className="text-[10px] font-bold text-primary hover:underline cursor-pointer"
-                >
-                  Change
-                </button>
-              </div>
-              <span className="label-mono text-[10px] text-muted-foreground truncate block">
-                {activeLocation?.label || "from you"}
-              </span>
-            </div>
+            <StatTile
+              icon={<Compass className="size-3.5 shrink-0 text-primary" aria-hidden />}
+              value={displayDistance}
+              label={activeLocation?.label || "from you"}
+              action={{ label: "Change", onClick: () => setOpenLocationDialog(true) }}
+            />
           </div>
 
           {/* Active Combos on this Restaurant */}
@@ -393,31 +459,34 @@ function RestaurantPage() {
 
           {/* Friendly Info Banners */}
           {needsAddress ? (
-            <div className="rounded-2xl bg-secondary/80 p-3.5 ring-1 ring-border flex items-center justify-between text-xs">
-              <span className="text-muted-foreground">
-                📍 Add a delivery address to see live fees and ETA
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-secondary/80 p-3 ring-1 ring-border">
+              <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                <MapPin className="size-4 shrink-0 text-primary" aria-hidden />
+                <span className="min-w-0">Add a delivery address for live fees and ETA</span>
               </span>
               <button
                 type="button"
                 onClick={() => setOpenLocationDialog(true)}
-                className="font-bold text-primary hover:underline cursor-pointer"
+                className="shrink-0 cursor-pointer rounded-xl bg-primary px-3 py-2 text-[10px] font-black tracking-wider whitespace-nowrap text-primary-foreground uppercase transition-colors hover:bg-primary/90"
               >
-                Set address →
+                Set address
               </button>
             </div>
           ) : isOutOfRange ? (
-            <div className="rounded-2xl bg-destructive/10 p-4 ring-1 ring-destructive/30 text-xs">
-              <p className="font-bold text-destructive">
-                📍{" "}
-                {branchSelection.message ||
-                  `You are ${displayDistance} away, which is outside the delivery area.`}
+            <div className="rounded-2xl bg-destructive/10 p-3.5 text-xs ring-1 ring-destructive/25">
+              <p className="flex items-start gap-2 font-bold text-destructive">
+                <MapPin className="size-4 shrink-0" aria-hidden />
+                <span>
+                  {branchSelection.message ||
+                    `You are ${displayDistance} away, which is outside the delivery area.`}
+                </span>
               </p>
-              <p className="mt-1 text-muted-foreground">
+              <p className="mt-1.5 pl-6 text-muted-foreground">
                 Switch to{" "}
                 <button
                   type="button"
                   onClick={() => setMode("pickup")}
-                  className="font-bold text-primary underline cursor-pointer"
+                  className="cursor-pointer font-bold text-primary underline underline-offset-2"
                 >
                   Pickup
                 </button>{" "}
@@ -425,43 +494,84 @@ function RestaurantPage() {
               </p>
             </div>
           ) : !hasDelivery ? (
-            <div className="rounded-2xl bg-amber-500/10 p-3.5 ring-1 ring-amber-500/30 text-xs text-amber-700">
-              📍 This restaurant doesn't offer delivery right now. You can still order for pickup at
-              the kitchen address.
-            </div>
+            <p className="flex items-start gap-2 rounded-2xl bg-amber-500/10 p-3.5 text-xs text-amber-700 ring-1 ring-amber-500/30 dark:text-amber-300">
+              <Store className="size-4 shrink-0" aria-hidden />
+              <span>
+                This restaurant doesn't offer delivery right now. You can still order for pickup at
+                the kitchen address.
+              </span>
+            </p>
           ) : null}
 
-          <p className="label-mono text-muted-foreground uppercase text-[11px]">
-            {restaurant.openNow ? "Open now" : "Closed"} • {restaurant.hours} •{" "}
-            {activeBranch?.address || activeBranch?.city || restaurant.address}
+          <p className="label-mono flex flex-wrap items-center gap-x-2 gap-y-1 text-muted-foreground">
+            <span
+              className={`flex items-center gap-1.5 font-bold ${
+                restaurant.openNow ? "text-success" : "text-destructive"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`size-1.5 rounded-full ${
+                  restaurant.openNow ? "bg-success" : "bg-destructive"
+                }`}
+              />
+              {restaurant.openNow ? "Open now" : "Closed"}
+            </span>
+            <span aria-hidden>•</span>
+            <span>{restaurant.hours}</span>
+            <span aria-hidden>•</span>
+            <span>{activeBranch?.address || activeBranch?.city || restaurant.address}</span>
           </p>
         </header>
 
-        {/* Categories Tab Navigation */}
-        <nav
-          aria-label="Menu categories"
-          className="no-scrollbar sticky top-0 z-30 md:top-16 mt-6 flex gap-2 overflow-x-auto border-b border-border bg-background/95 px-4 py-3 backdrop-blur-md"
-        >
-          {restaurant.categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setActiveCategory(cat)}
-              aria-pressed={currentCategory === cat}
-              className={`flex-shrink-0 rounded-full px-4 py-2 text-[11px] font-black tracking-widest uppercase ring-1 cursor-pointer transition-colors ${
-                currentCategory === cat
-                  ? "bg-foreground text-background ring-transparent"
-                  : "bg-secondary ring-border hover:bg-secondary/80"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </nav>
+        {/* Categories Tab Navigation — redundant when the menu has a single section */}
+        {restaurant.categories.length > 1 ? (
+          <nav
+            aria-label="Menu categories"
+            className="sticky top-0 z-30 mt-6 border-b border-border bg-background/95 backdrop-blur-md md:top-16"
+          >
+            <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 py-3 [mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)]">
+              {restaurant.categories.map((cat) => {
+                const active = currentCategory === cat;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setActiveCategory(cat)}
+                    aria-pressed={active}
+                    className={`flex flex-shrink-0 cursor-pointer items-center gap-2 rounded-full py-2 pr-3 pl-4 text-[11px] font-black tracking-widest uppercase ring-1 transition-colors ${
+                      active
+                        ? "bg-foreground text-background ring-transparent"
+                        : "bg-secondary ring-border hover:bg-secondary/80"
+                    }`}
+                  >
+                    {cat}
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 font-mono text-[9px] tabular-nums ${
+                        active ? "bg-background/20" : "bg-foreground/8 text-muted-foreground"
+                      }`}
+                    >
+                      {countFor(cat)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        ) : null}
 
         {/* Dish List with Combo & Bundle Badges (§8 of Integration Guide) */}
         <section className="px-4 pt-6">
-          <h2 className="mb-4 text-lg font-black tracking-tight">{currentCategory}</h2>
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h2 className="min-w-0 truncate text-lg font-black tracking-tight">
+              {currentCategory}
+            </h2>
+            {visible.length > 0 ? (
+              <span className="label-mono shrink-0 text-muted-foreground">
+                {visible.length} {visible.length === 1 ? "item" : "items"}
+              </span>
+            ) : null}
+          </div>
           <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {visible.map((dish) => {
               // Match active combo deals containing this dish
@@ -488,34 +598,43 @@ function RestaurantPage() {
                         className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
                       />
                       {matchingCombo ? (
-                        <span className="absolute top-1.5 left-1.5 rounded-md bg-primary px-1.5 py-0.5 text-[8px] font-black tracking-wider uppercase text-primary-foreground shadow-md">
+                        <span className="absolute top-1.5 left-1.5 rounded-md bg-primary px-1.5 py-0.5 text-[8px] font-black tracking-wider text-primary-foreground uppercase shadow-md">
                           {matchingCombo.kind === "multibuy"
                             ? `${matchingCombo.buy_qty} for ${matchingCombo.pay_qty}`
                             : "Bundle Deal"}
                         </span>
                       ) : null}
+                      {/* Decorative — the whole card is the button that opens the dish sheet */}
+                      <span
+                        aria-hidden
+                        className="absolute right-1.5 bottom-1.5 grid size-7 place-items-center rounded-full bg-background text-foreground shadow-md ring-1 ring-border transition-colors group-hover:bg-primary group-hover:text-primary-foreground group-hover:ring-primary"
+                      >
+                        <Plus className="size-4" strokeWidth={2.6} />
+                      </span>
                     </div>
 
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5 self-stretch py-0.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <span className="min-w-0 text-base leading-tight font-bold">
-                          {dish.name}
-                        </span>
-                        <span className="shrink-0 rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-bold ring-1 ring-border">
-                          {money(dish.price)}
-                        </span>
-                      </div>
-
-                      <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                        {dish.description}
+                      {/* Full-width title: a price chip here would squeeze longer
+                          dish names into a mid-word ellipsis on narrow screens. */}
+                      <span className="line-clamp-2 text-base leading-tight font-bold">
+                        {dish.name}
                       </span>
 
-                      <span className="label-mono mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5 text-muted-foreground">
-                        <span className="flex items-center gap-1">
+                      {dish.description ? (
+                        <span className="line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                          {dish.description}
+                        </span>
+                      ) : null}
+
+                      <span className="mt-auto flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-2">
+                        <span className="font-mono text-[13px] leading-none font-black text-foreground transition-colors group-hover:text-primary">
+                          {money(dish.price)}
+                        </span>
+                        <span className="label-mono flex items-center gap-1 text-muted-foreground">
                           <Clock className="size-3" aria-hidden />
                           {dish.prepMinutes} min
                         </span>
-                        <span className="flex items-center gap-1">
+                        <span className="label-mono flex items-center gap-1 text-muted-foreground">
                           <Flame className="size-3" aria-hidden />
                           {dish.calories} kcal
                         </span>
@@ -532,9 +651,15 @@ function RestaurantPage() {
             })}
           </ul>
           {visible.length === 0 ? (
-            <p className="rounded-3xl bg-secondary p-6 text-center text-sm text-muted-foreground ring-1 ring-border">
-              Nothing in this section yet.
-            </p>
+            <div className="rounded-3xl bg-secondary/60 px-6 py-10 text-center ring-1 ring-border">
+              <div className="mx-auto grid size-12 place-items-center rounded-2xl bg-background text-muted-foreground ring-1 ring-border">
+                <UtensilsCrossed className="size-5" aria-hidden />
+              </div>
+              <p className="mt-3 text-sm font-bold">Nothing in this section yet</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Check back soon — this kitchen is still adding dishes.
+              </p>
+            </div>
           ) : null}
         </section>
       </main>
