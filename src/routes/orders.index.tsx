@@ -1,8 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ChevronRight, ReceiptText, RotateCcw, UserRound } from "lucide-react";
-import { BottomNav } from "@/components/app/bottom-nav";
-import { CartBar } from "@/components/app/cart-bar";
 import { PageShell, Panel, SectionLabel } from "@/components/app/checkout-ui";
 import {
   OrderPhaseIcon,
@@ -223,9 +221,6 @@ function OrdersPage() {
           </p>
         ) : null}
       </main>
-
-      <CartBar />
-      <BottomNav />
     </PageShell>
   );
 }

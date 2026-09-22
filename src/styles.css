@@ -63,6 +63,9 @@
 :root {
   --radius: 1rem;
 
+  /* Fixed mobile nav: 12px top padding + 44px tap target + the safe area. */
+  --nav-bottom-height: calc(3.5rem + max(1.75rem, env(safe-area-inset-bottom, 0px)));
+
   --background: oklch(0.986 0.005 85);
   --foreground: oklch(0.216 0.007 55);
   --card: oklch(1 0 0);
@@ -174,6 +177,24 @@
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+/*
+ * Height of the fixed mobile nav, including the device safe area, so anything
+ * that floats above it (the cart bar) can offset itself from one number.
+ */
+@utility nav-safe-bottom {
+  padding-bottom: max(1.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+/*
+ * Fixed bars get their own compositor layer. Without this, mobile browsers
+ * drop translucent `backdrop-filter` bars mid-scroll while the address bar
+ * collapses, so the nav appears to flicker away and come back.
+ */
+@utility fixed-bar {
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 @utility label-mono {

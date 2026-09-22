@@ -80,7 +80,7 @@ function LoginPage() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-2xl">
+    <div className="mx-auto min-h-dvh w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-2xl">
       <header className="flex items-center gap-3 border-b border-border px-4 py-4">
         <Link
           to="/"

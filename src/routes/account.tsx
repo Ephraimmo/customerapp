@@ -21,8 +21,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { BottomNav } from "@/components/app/bottom-nav";
-import { CartBar } from "@/components/app/cart-bar";
 import {
   Callout,
   PageShell,
@@ -910,9 +908,6 @@ function AccountPage() {
           </div>
         </div>
       ) : null}
-
-      <CartBar />
-      <BottomNav />
     </PageShell>
   );
 }

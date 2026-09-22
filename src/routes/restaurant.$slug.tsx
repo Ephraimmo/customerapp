@@ -15,7 +15,6 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { toast } from "sonner";
-import { CartBar } from "@/components/app/cart-bar";
 import { DishSheet } from "@/components/app/dish-sheet";
 import { LocationSelectorDialog } from "@/components/app/location-selector-dialog";
 import { money, type Dish } from "@/lib/data";
@@ -73,7 +72,7 @@ function MenuSkeleton() {
     <div
       aria-busy="true"
       aria-label="Loading menu"
-      className="mx-auto min-h-screen w-full max-w-full animate-pulse bg-background sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl"
+      className="mx-auto min-h-dvh w-full max-w-full animate-pulse bg-background sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl"
     >
       <div className="aspect-[16/10] w-full bg-secondary md:aspect-[21/9] md:max-h-[380px] md:rounded-b-[32px]" />
       <div className="space-y-4 px-4 pt-5">
@@ -234,7 +233,7 @@ function RestaurantPage() {
     if (loading) return <MenuSkeleton />;
 
     return (
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col items-center justify-center px-4 py-24 text-center md:max-w-3xl">
+      <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center px-4 py-24 text-center md:max-w-3xl">
         <div className="grid size-16 place-items-center rounded-3xl bg-secondary text-muted-foreground ring-1 ring-border">
           <UtensilsCrossed className="size-7" aria-hidden />
         </div>
@@ -274,7 +273,7 @@ function RestaurantPage() {
   const hasReviews = (restaurant.reviewCount ?? 0) > 0;
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
+    <div className="mx-auto min-h-dvh w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
       {/* Cover Image Header */}
       <div className="relative">
         <div className="relative overflow-hidden bg-secondary md:rounded-b-[32px]">
@@ -676,8 +675,6 @@ function RestaurantPage() {
         open={openLocationDialog}
         onClose={() => setOpenLocationDialog(false)}
       />
-
-      <CartBar />
     </div>
   );
 }

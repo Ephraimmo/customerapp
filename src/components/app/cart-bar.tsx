@@ -1,16 +1,32 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { ChevronRight, ShoppingBag } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { money } from "@/lib/data";
 
+/** Routes where the cart is already the subject of the page, or is being paid for. */
+function hidesCartBar(pathname: string) {
+  return (
+    pathname.startsWith("/cart") ||
+    pathname.startsWith("/checkout") ||
+    pathname.startsWith("/login") ||
+    /^\/orders\/.+/.test(pathname)
+  );
+}
+
+/**
+ * Mounted once in the root layout, not per route, so it no longer replays its
+ * slide-up animation every time the page changes.
+ */
 export function CartBar() {
+  const pathname = useRouterState({ select: (s) => s?.location?.pathname || "/" });
   const { itemCount, subtotal, currentRestaurantName } = useCart();
-  if (itemCount === 0) return null;
+
+  if (itemCount === 0 || hidesCartBar(pathname)) return null;
 
   const itemLabel = `${itemCount} ${itemCount === 1 ? "item" : "items"}`;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-24 md:pb-6">
+    <div className="fixed-bar pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-[calc(var(--nav-bottom-height)+0.75rem)] md:pb-6">
       <Link
         to="/cart"
         aria-label={`View cart — ${itemLabel}${

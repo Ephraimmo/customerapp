@@ -16,6 +16,8 @@ import { AuthProvider } from "@/lib/auth";
 import { LocationProvider } from "@/lib/location";
 import { Toaster } from "@/components/ui/sonner";
 import { TopNav } from "@/components/app/top-nav";
+import { BottomNav } from "@/components/app/bottom-nav";
+import { CartBar } from "@/components/app/cart-bar";
 import { useLiveSync } from "@/lib/firebase-adapters";
 import { initPerfLogging } from "@/lib/perf-log";
 
@@ -154,6 +156,13 @@ function RootComponent() {
               {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
               <Outlet />
             </main>
+            {/*
+              The fixed bottom chrome lives here, outside the Outlet, so it survives
+              navigation instead of unmounting and remounting with every page. Each
+              component decides which routes it appears on.
+            */}
+            <CartBar />
+            <BottomNav />
             <Toaster position="top-center" />
           </CartProvider>
         </LocationProvider>

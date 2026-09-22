@@ -21,8 +21,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { BottomNav } from "@/components/app/bottom-nav";
-import { CartBar } from "@/components/app/cart-bar";
 import { RestaurantCard } from "@/components/app/restaurant-card";
 import { money } from "@/lib/data";
 import {
@@ -198,7 +196,7 @@ function Discover() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
+    <div className="mx-auto min-h-dvh w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
       {/* Top Header & Search Area */}
       <header className="sticky top-0 z-40 md:static border-b border-border bg-background/95 px-4 pt-4 pb-3 backdrop-blur-md">
         <div className="mb-3 flex items-center justify-between md:hidden">
@@ -918,8 +916,6 @@ function Discover() {
         open={openLocationModal}
         onClose={() => setOpenLocationModal(false)}
       />
-      <CartBar />
-      <BottomNav />
     </div>
   );
 }

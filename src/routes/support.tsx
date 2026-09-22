@@ -12,8 +12,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { BottomNav } from "@/components/app/bottom-nav";
-import { CartBar } from "@/components/app/cart-bar";
 import { Panel, SectionLabel, fieldClass } from "@/components/app/checkout-ui";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
@@ -252,7 +250,7 @@ function SupportPage() {
   }
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-full bg-background sm:max-w-[640px] md:max-w-4xl lg:max-w-6xl">
+    <div className="mx-auto min-h-dvh w-full max-w-full bg-background sm:max-w-[640px] md:max-w-4xl lg:max-w-6xl">
       <header className="sticky top-0 z-40 border-b border-border bg-background/90 px-4 pt-4 pb-3 backdrop-blur-md md:static">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
@@ -800,9 +798,6 @@ function SupportPage() {
           </div>
         </div>
       </main>
-
-      <CartBar />
-      <BottomNav />
     </div>
   );
 }

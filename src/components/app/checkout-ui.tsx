@@ -77,7 +77,7 @@ export function CheckoutProgress({
 /** Single column page width, shared with ActionBar so the sticky bar lines up. */
 export function PageShell({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto min-h-screen w-full max-w-full bg-background sm:max-w-[640px] md:max-w-2xl">
+    <div className="mx-auto min-h-dvh w-full max-w-full bg-background sm:max-w-[640px] md:max-w-2xl">
       {children}
     </div>
   );
@@ -235,7 +235,7 @@ export function Callout({
 /** Sticky bottom bar, width-matched to PageShell. */
 export function ActionBar({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
+    <div className="fixed-bar fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/95 backdrop-blur-md">
       <div className="mx-auto w-full max-w-full px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:max-w-[640px] md:max-w-2xl">
         {children}
       </div>
