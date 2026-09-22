@@ -8,6 +8,10 @@ import { cn } from "@/lib/utils";
  * Keeps both pages on one surface, spacing and typography scale.
  */
 
+/** Shared surface for inputs, selects and textareas across the app. */
+export const fieldClass =
+  "w-full rounded-lg border border-border bg-secondary px-3.5 py-2.5 text-sm outline-none transition-shadow placeholder:text-muted-foreground/70 focus:border-primary/40 focus:ring-2 focus:ring-primary/20";
+
 const STEPS = [
   { id: "cart", label: "Cart" },
   { id: "checkout", label: "Checkout" },
