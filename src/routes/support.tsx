@@ -7,6 +7,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Paperclip,
+  PlayCircle,
   Send,
   X,
 } from "lucide-react";
@@ -343,6 +344,14 @@ function SupportPage() {
                 >
                   Start a conversation
                 </button>
+                {/* Most first-time questions are answered by the walkthrough. */}
+                <Link
+                  to="/how-it-works"
+                  className="mt-3 flex items-center justify-center gap-1.5 text-[11px] font-bold text-primary hover:underline"
+                >
+                  <PlayCircle className="size-3.5" aria-hidden />
+                  New here? Watch how to order
+                </Link>
               </Panel>
             ) : (
               <div className="space-y-2">

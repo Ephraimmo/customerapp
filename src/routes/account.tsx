@@ -15,6 +15,7 @@ import {
   LogIn,
   LogOut,
   MapPin,
+  PlayCircle,
   Plus,
   Sparkles,
   Trash2,
@@ -388,6 +389,26 @@ function AccountPage() {
           >
             Help
           </SectionLabel>
+
+          {/* New customers ask how to order far more often than they raise a
+              ticket, so the walkthrough sits above the support panel. */}
+          <Link
+            to="/how-it-works"
+            className="mb-2 flex items-center gap-3 rounded-2xl border border-primary/25 bg-primary/10 p-4 transition-colors hover:bg-primary/15"
+          >
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground">
+              <PlayCircle className="size-5" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-foreground">
+                How to order — watch the guide
+              </span>
+              <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                A narrated walkthrough, from sign-up to checkout
+              </span>
+            </span>
+            <ChevronRight className="size-4 shrink-0 text-primary" aria-hidden />
+          </Link>
 
           <Panel className="overflow-hidden">
             <div className="flex items-center gap-3 p-4">
