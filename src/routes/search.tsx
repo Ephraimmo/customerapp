@@ -25,13 +25,13 @@ export const Route = createFileRoute("/search")({
   validateSearch: searchSchema,
   head: () => ({
     meta: [
-      { title: "Search restaurants & dishes — Hearth" },
+      { title: "Search restaurants & dishes — Kasi Zonke Link" },
       {
         name: "description",
         content:
           "Search by restaurant, dish, cuisine or diet. Filter by rating, delivery fee and prep time.",
       },
-      { property: "og:title", content: "Search restaurants & dishes — Hearth" },
+      { property: "og:title", content: "Search restaurants & dishes — Kasi Zonke Link" },
       {
         property: "og:description",
         content: "Find exactly what you're craving with cuisine, price and rating filters.",

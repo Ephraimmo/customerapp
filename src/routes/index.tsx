@@ -20,7 +20,7 @@ import {
   Utensils,
   X,
 } from "lucide-react";
-import { HearthMark } from "@/components/app/logo";
+import { BrandMark } from "@/components/app/logo";
 import { toast } from "sonner";
 import { RestaurantCard } from "@/components/app/restaurant-card";
 import { money } from "@/lib/data";
@@ -40,13 +40,13 @@ import { getClosestBranch } from "@/lib/branch-selector";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Hearth — Food delivery from local kitchens" },
+      { title: "Kasi Zonke Link — Food delivery from local kitchens" },
       {
         name: "description",
         content:
-          "Order from nearby restaurants, customize every dish and track your delivery live with Hearth.",
+          "Order from nearby restaurants, customize every dish and track your delivery live with Kasi Zonke Link.",
       },
-      { property: "og:title", content: "Hearth — Food delivery from local kitchens" },
+      { property: "og:title", content: "Kasi Zonke Link — Food delivery from local kitchens" },
       {
         property: "og:description",
         content: "Discover nearby kitchens, build your order in a few taps and track it live.",
@@ -201,9 +201,9 @@ function Discover() {
       {/* Top Header & Search Area */}
       <header className="sticky top-0 z-40 md:static border-b border-border bg-background/95 px-4 pt-4 pb-3 backdrop-blur-md">
         <div className="mb-3 flex items-center justify-between gap-3 md:hidden">
-          {/* Brand mark: mobile had no Hearth branding anywhere above the fold. */}
-          <HearthMark className="size-7 shrink-0 text-primary" />
-          <span className="sr-only">Hearth</span>
+          {/* Brand mark: mobile had no branding anywhere above the fold. */}
+          <BrandMark className="size-7 shrink-0 text-primary" />
+          <span className="sr-only">Kasi Zonke Link</span>
 
           <button
             type="button"
@@ -648,7 +648,9 @@ function Discover() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-sm font-black text-foreground">Hearth Rewards Programme</h2>
+                  <h2 className="text-sm font-black text-foreground">
+                    Kasi Zonke Link Rewards Programme
+                  </h2>
                   <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-primary">
                     {pointsConfig.discount_percent || 10}% OFF
                   </span>
@@ -881,7 +883,7 @@ function Discover() {
           )}
         </section>
 
-        {/* Why Hearth / Value Props Strip */}
+        {/* Why us / Value Props Strip */}
         <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-border pt-8 text-xs">
           <div className="rounded-2xl bg-secondary/60 p-4 border border-border/80 space-y-1">
             <div className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary">

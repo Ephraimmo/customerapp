@@ -47,12 +47,12 @@ import {
 export const Route = createFileRoute("/checkout")({
   head: () => ({
     meta: [
-      { title: "Checkout — Hearth" },
+      { title: "Checkout — Kasi Zonke Link" },
       {
         name: "description",
         content: "Confirm your delivery address, choose a payment method and place your order.",
       },
-      { property: "og:title", content: "Checkout — Hearth" },
+      { property: "og:title", content: "Checkout — Kasi Zonke Link" },
       {
         property: "og:description",
         content: "Delivery or pickup, saved cards, wallet or cash — checkout in a couple of taps.",
@@ -761,7 +761,7 @@ function CheckoutPage() {
                 <h3 className="text-xs font-bold">Card details</h3>
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
-                Handled directly by Stripe — your card number never reaches Hearth.
+                Handled directly by Stripe — your card number never reaches Kasi Zonke Link.
               </p>
 
               <div className="mt-3">
@@ -786,11 +786,11 @@ function CheckoutPage() {
 
               <div className="mt-3 divide-y divide-border rounded-lg border border-border bg-secondary/50 px-3 py-1">
                 <CopyRow label="Bank" value="Standard Bank South Africa" />
-                <CopyRow label="Account name" value="Hearth Kitchens (Pty) Ltd" />
+                <CopyRow label="Account name" value="Kasi Zonke Link (Pty) Ltd" />
                 <CopyRow label="Account no." value="6289 1234 5678" />
                 <CopyRow label="Branch code" value="250655" />
                 <CopyRow label="Amount" value={money(totals.total)} />
-                <CopyRow label="Reference" value={`HEARTH / ${user?.name || "Customer"}`} />
+                <CopyRow label="Reference" value={`KASI ZONKE / ${user?.name || "Customer"}`} />
               </div>
 
               <div className="mt-4">

@@ -39,13 +39,13 @@ import {
 export const Route = createFileRoute("/cart")({
   head: () => ({
     meta: [
-      { title: "Your cart — Hearth" },
+      { title: "Your cart — Kasi Zonke Link" },
       {
         name: "description",
         content:
           "Review your items, apply a promo code, add a tip and see the full price breakdown.",
       },
-      { property: "og:title", content: "Your cart — Hearth" },
+      { property: "og:title", content: "Your cart — Kasi Zonke Link" },
       {
         property: "og:description",
         content: "Adjust quantities, add coupons and continue to a secure checkout.",
@@ -543,7 +543,7 @@ function CartPage() {
                       <p className="mt-1.5 text-xs font-medium text-destructive">{couponReason}</p>
                     ) : (
                       <p className="mt-1.5 text-[11px] text-muted-foreground">
-                        Try WELCOME20, HEARTH50 or FREEDELIVERY.
+                        Try WELCOME20, KASI50 or FREEDELIVERY.
                       </p>
                     )}
                   </form>

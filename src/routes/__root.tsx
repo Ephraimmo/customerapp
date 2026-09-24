@@ -16,7 +16,7 @@ import { AuthProvider } from "@/lib/auth";
 import { LocationProvider } from "@/lib/location";
 import { Toaster } from "@/components/ui/sonner";
 import { TopNav } from "@/components/app/top-nav";
-import { HearthLogo } from "@/components/app/logo";
+import { BrandLogo } from "@/components/app/logo";
 import { BottomNav } from "@/components/app/bottom-nav";
 import { CartBar } from "@/components/app/cart-bar";
 import { useLiveSync } from "@/lib/firebase-adapters";
@@ -26,7 +26,7 @@ function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <HearthLogo className="mb-8 justify-center" />
+        <BrandLogo className="mb-8 justify-center" />
         <h1 className="text-7xl font-black tracking-tight text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-black tracking-tight text-foreground">Page not found</h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -55,7 +55,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <HearthLogo className="mb-8 justify-center" />
+        <BrandLogo className="mb-8 justify-center" />
         <h1 className="text-xl font-black tracking-tight text-foreground">This page didn't load</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
@@ -88,14 +88,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "theme-color", content: "#fb4500" },
-      { name: "apple-mobile-web-app-title", content: "Hearth" },
-      { name: "application-name", content: "Hearth" },
-      { title: "Hearth — Food delivery from local kitchens" },
+      { name: "apple-mobile-web-app-title", content: "Kasi Zonke" },
+      { name: "application-name", content: "Kasi Zonke Link" },
+      { title: "Kasi Zonke Link — Food delivery from local kitchens" },
       {
         name: "description",
         content: "Order from nearby restaurants, customize dishes and track delivery live.",
       },
-      { property: "og:title", content: "Hearth — Food delivery" },
+      { property: "og:title", content: "Kasi Zonke Link — Food delivery" },
       {
         property: "og:description",
         content: "Order from nearby restaurants and track your delivery live.",

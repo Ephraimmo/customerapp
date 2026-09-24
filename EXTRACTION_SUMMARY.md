@@ -1,4 +1,4 @@
-# Swift Extraction / Hearth — Food Delivery Customer App
+# Swift Extraction / Kasi Zonke Link — Food Delivery Customer App
 
 **Repository**: [https://github.com/Ephraimmo/swift-extraction.git](https://github.com/Ephraimmo/swift-extraction.git)  
 **Status**: Successfully downloaded, extracted, dependencies installed, and build verified.
@@ -7,7 +7,7 @@
 
 ## 1. Project Overview
 
-**Hearth** (also referenced as _Flavor Finder_) is an enterprise-grade food ordering and delivery customer web application built with **TanStack Start**, **TanStack Router**, **React 19**, **TypeScript**, **Tailwind CSS v4**, **Radix UI**, and **Firebase Realtime Database**.
+**Kasi Zonke Link** (previously Hearth, also referenced as _Flavor Finder_) is an enterprise-grade food ordering and delivery customer web application built with **TanStack Start**, **TanStack Router**, **React 19**, **TypeScript**, **Tailwind CSS v4**, **Radix UI**, and **Firebase Realtime Database**.
 
 It provides a modern customer-facing delivery experience comparable to Uber Eats, Deliveroo, DoorDash, and Bolt Food, featuring live restaurant discovery, real-time Firebase menu sync, customizable dishes, persistent shopping cart, multi-step checkout, real-time order tracking, user authentication, loyalty program, and customer account management.
 
@@ -116,7 +116,7 @@ swift-extraction/
 4. **Cart & Checkout (`/cart`, `/checkout`)**:
    - Multi-item management with live subtotal, delivery fee calculation, tip selection (10%, 15%, 20%, custom), and promo coupon code validation.
    - Address selector (Home, Work, Custom).
-   - Multiple payment options (Saved Cards, Apple Pay, Hearth Wallet, Cash on Delivery).
+   - Multiple payment options (Saved Cards, Apple Pay, Kasi Zonke Link Wallet, Cash on Delivery).
    - Automatic order generation with random IDs and instant tracking redirection.
 
 5. **Live Order Tracking (`/orders/$orderId`)**:

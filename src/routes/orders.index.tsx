@@ -20,12 +20,12 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/orders/")({
   head: () => ({
     meta: [
-      { title: "Your orders — Hearth" },
+      { title: "Your orders — Kasi Zonke Link" },
       {
         name: "description",
         content: "Track current orders, revisit past deliveries and reorder your favourites.",
       },
-      { property: "og:title", content: "Your orders — Hearth" },
+      { property: "og:title", content: "Your orders — Kasi Zonke Link" },
       {
         property: "og:description",
         content: "Live order status, receipts and one-tap reordering.",

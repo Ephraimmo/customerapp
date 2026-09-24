@@ -15,7 +15,7 @@ export function renderErrorPage(): string {
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>This page didn't load — Hearth</title>
+    <title>This page didn't load — Kasi Zonke Link</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style>
@@ -33,7 +33,7 @@ export function renderErrorPage(): string {
   </head>
   <body>
     <div class="card">
-      <div class="brand">${FLAME}<span>Hearth</span></div>
+      <div class="brand">${FLAME}<span>Kasi Zonke Link</span></div>
       <h1>This page didn't load</h1>
       <p>Something went wrong on our end. You can try refreshing or head back home.</p>
       <div class="actions">

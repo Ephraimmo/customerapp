@@ -728,7 +728,7 @@ export type Coupon = { type: "percent" | "fixed" | "delivery"; value: number };
 
 /** Coupon codes synchronized from Firebase promotions/coupons nodes. */
 export const coupons: Record<string, Coupon> = {
-  HEARTH50: { type: "percent", value: 50 },
+  KASI50: { type: "percent", value: 50 },
   WELCOME20: { type: "percent", value: 20 },
   FREEDELIVERY: { type: "delivery", value: 0 },
 };

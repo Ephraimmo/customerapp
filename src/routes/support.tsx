@@ -35,13 +35,13 @@ export const Route = createFileRoute("/support")({
   validateSearch: supportSearchSchema,
   head: () => ({
     meta: [
-      { title: "Help & support — Hearth" },
+      { title: "Help & support — Kasi Zonke Link" },
       {
         name: "description",
         content:
           "Chat live with customer support, get real-time assistance with your orders, and track inquiries.",
       },
-      { property: "og:title", content: "Help & support — Hearth" },
+      { property: "og:title", content: "Help & support — Kasi Zonke Link" },
       {
         property: "og:description",
         content:
@@ -266,7 +266,7 @@ function SupportPage() {
               <p className="mt-1.5 truncate text-xs text-muted-foreground">
                 {totalUnreadCount > 0
                   ? `${totalUnreadCount} new ${totalUnreadCount === 1 ? "reply" : "replies"} from our team`
-                  : "Chat with the Hearth team about any order"}
+                  : "Chat with the Kasi Zonke Link team about any order"}
               </p>
             </div>
           </div>

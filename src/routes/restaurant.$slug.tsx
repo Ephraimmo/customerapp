@@ -96,8 +96,8 @@ function MenuSkeleton() {
 
 export const Route = createFileRoute("/restaurant/$slug")({
   head: ({ params }) => {
-    const title = "Restaurant menu — order delivery on Hearth";
-    const description = `Browse the live menu for ${params.slug.replace(/-/g, " ")} and order delivery on Hearth.`;
+    const title = "Restaurant menu — order delivery on Kasi Zonke Link";
+    const description = `Browse the live menu for ${params.slug.replace(/-/g, " ")} and order delivery on Kasi Zonke Link.`;
     return {
       meta: [
         { title },

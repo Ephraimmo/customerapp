@@ -46,12 +46,12 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/account")({
   head: () => ({
     meta: [
-      { title: "Your account & Rewards — Hearth" },
+      { title: "Your account & Rewards — Kasi Zonke Link" },
       {
         name: "description",
         content: "Manage addresses, loyalty points wallet, promotions and order history.",
       },
-      { property: "og:title", content: "Your account & Rewards — Hearth" },
+      { property: "og:title", content: "Your account & Rewards — Kasi Zonke Link" },
       {
         property: "og:description",
         content: "Points, rewards wallet, saved locations and favorites in one place.",

@@ -13,7 +13,7 @@ This document covers customer authentication workflows:
 
 ## Test Environment
 
-- Application: Hearth customer app
+- Application: Kasi Zonke Link customer app
 - Supported browsers: latest Chrome, Edge, Firefox, and Safari
 - Viewports: desktop, tablet, and mobile
 - Network modes: online, offline, and slow/interrupted network

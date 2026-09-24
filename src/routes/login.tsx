@@ -1,20 +1,20 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, Gift, LogIn, UserPlus } from "lucide-react";
-import { HearthLogo } from "@/components/app/logo";
+import { BrandLogo } from "@/components/app/logo";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in or Register — Hearth" },
+      { title: "Sign in or Register — Kasi Zonke Link" },
       {
         name: "description",
         content:
-          "Sign in or create an account on Hearth to keep your cart, addresses, loyalty points and orders saved.",
+          "Sign in or create an account on Kasi Zonke Link to keep your cart, addresses, loyalty points and orders saved.",
       },
-      { property: "og:title", content: "Sign in or Register — Hearth" },
+      { property: "og:title", content: "Sign in or Register — Kasi Zonke Link" },
       {
         property: "og:description",
         content:
@@ -100,7 +100,7 @@ function LoginPage() {
         </div>
 
         {/* Signing in is the moment the brand should be visible. */}
-        <HearthLogo className="ml-auto" showWordmark={false} />
+        <BrandLogo className="ml-auto" showWordmark={false} />
       </header>
 
       <main className="space-y-6 px-4 pt-6 pb-24">

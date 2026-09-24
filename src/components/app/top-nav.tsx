@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import { useLoyaltyWallet } from "@/lib/firebase-adapters";
 import { useCustomerSupportTickets } from "@/lib/support";
 import { cn } from "@/lib/utils";
-import { HearthLogo } from "./logo";
+import { BrandLogo } from "./logo";
 import { LocationSelectorDialog } from "./location-selector-dialog";
 
 const items = [
@@ -35,10 +35,10 @@ export function TopNav() {
         <div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-6">
           <Link
             to="/"
-            aria-label="Hearth — home"
+            aria-label="Kasi Zonke Link — home"
             className="shrink-0 rounded-lg transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           >
-            <HearthLogo />
+            <BrandLogo wordmarkClassName="text-base" />
           </Link>
 
           <nav aria-label="Primary" className="flex min-w-0 items-center gap-0.5">
