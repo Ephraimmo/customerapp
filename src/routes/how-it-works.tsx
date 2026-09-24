@@ -32,8 +32,8 @@ export const Route = createFileRoute("/how-it-works")({
   component: HowItWorksPage,
 });
 
-const VIDEO = "/tutorial/how-to-order.mp4";
-const POSTER = "/tutorial/how-to-order-poster.jpg";
+const VIDEO = "/videos/how-to-order.mp4";
+const POSTER = "/videos/how-to-order-poster.jpg";
 
 /** Offsets come from the recording itself, so seeking lands on the real step. */
 type Chapter = {
