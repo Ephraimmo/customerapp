@@ -373,6 +373,10 @@ export function mapRestaurant(
   const longitude = lngRaw != null && lngRaw !== "" ? Number(lngRaw) : 28.0273;
   const status = (str(raw, ["status"], "pending") as Restaurant["status"]) || "pending";
 
+  // Per-restaurant Cloudinary account for EFT proof-of-payment uploads.
+  const cloudinaryCloudName = str(raw, ["cloudinaryCloudName", "cloudinary_cloud_name"]);
+  const cloudinaryUploadPreset = str(raw, ["cloudinaryUploadPreset", "cloudinary_upload_preset"]);
+
   return {
     id,
     slug,
@@ -437,6 +441,11 @@ export function mapRestaurant(
     opens_at: opens || "10:00",
     closes_at: closes || "22:30",
     status,
+
+    // This mapper is an allow-list: a field absent here is dropped before any
+    // caller sees it, even though it exists on the Firestore document.
+    ...(cloudinaryCloudName ? { cloudinaryCloudName } : {}),
+    ...(cloudinaryUploadPreset ? { cloudinaryUploadPreset } : {}),
   };
 }
 
@@ -498,8 +507,8 @@ export function useRestaurants() {
         rawBranchesRoot[r.slug] ||
         (r.id ? rawBranchesRoot[r.id] : null) ||
         {};
-      const branchesList: FirebaseRestaurantBranch[] = Object.values(branchMap).filter(
-        (b: any) => Boolean(b && typeof b === "object" && b.id),
+      const branchesList: FirebaseRestaurantBranch[] = Object.values(branchMap).filter((b: any) =>
+        Boolean(b && typeof b === "object" && b.id),
       ) as FirebaseRestaurantBranch[];
 
       if (branchesList.length === 0) {

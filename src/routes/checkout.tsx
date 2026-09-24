@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { loadStripe, type Stripe, type StripeElementsOptions } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import {
   ArrowLeft,
   Banknote,
@@ -23,6 +25,8 @@ import { useAuth } from "@/lib/auth";
 import { money, type PaymentMethod, type DeliveryAddress } from "@/lib/data";
 import { useLocation } from "@/lib/location";
 import { useRestaurantPaymentConfig } from "@/lib/firebase-adapters";
+import { cloudinaryTargetFor, uploadProofOfPayment } from "@/lib/cloudinary";
+import { StripeCardFields, type CardConfirm } from "@/components/app/stripe-card-fields";
 import { cn } from "@/lib/utils";
 import { AuthDialog } from "@/components/app/auth-dialog";
 import { LocationSelectorDialog } from "@/components/app/location-selector-dialog";
@@ -113,11 +117,42 @@ function CheckoutPage() {
   // EFT Proof Attachment State
   const [eftProofName, setEftProofName] = useState("");
   const [eftProofUrl, setEftProofUrl] = useState("");
+  const [uploadingProof, setUploadingProof] = useState(false);
 
-  // Live Restaurant Payment Configuration (§3.6)
-  const targetRestaurantId = restaurant?.id || restaurantSlug || "rst_5jqj45emntl";
+  // Registered by the Stripe fields once Elements is ready; see StripeCardFields.
+  const cardConfirmRef = useRef<CardConfirm | null>(null);
+
+  /*
+   * No fixture fallback here any more. A hardcoded restaurant id was safe while
+   * payment was simulated; now that a real card charge and a real proof-of-payment
+   * upload are keyed to this id, falling back would bill one restaurant's Stripe
+   * account for another's order.
+   */
+  const targetRestaurantId = restaurant?.id || restaurantSlug || null;
   const { paymentConfig, loading: paymentConfigLoading } =
     useRestaurantPaymentConfig(targetRestaurantId);
+
+  // Per-restaurant Stripe and Cloudinary accounts. Missing either one makes the
+  // matching payment method unavailable rather than falling back to anything.
+  const stripePublishableKey = paymentConfig?.methods?.card?.stripePublishableKey?.trim() || null;
+  const cloudinaryTarget = useMemo(() => cloudinaryTargetFor(restaurant), [restaurant]);
+
+  const stripePromise = useMemo<Promise<Stripe | null> | null>(
+    () => (stripePublishableKey ? loadStripe(stripePublishableKey) : null),
+    [stripePublishableKey],
+  );
+
+  // Deferred-intent mode: Elements renders from the amount, and the PaymentIntent
+  // is created server-side only once the customer actually submits.
+  const elementsOptions = useMemo<StripeElementsOptions>(
+    () => ({
+      mode: "payment",
+      amount: Math.max(1, Math.round(totals.total * 100)),
+      currency: "zar",
+      paymentMethodTypes: ["card"],
+    }),
+    [totals.total],
+  );
 
   // Filter payment methods based on per-restaurant configuration and order fulfillment mode (§3.6)
   const availablePaymentMethods = useMemo(() => {
@@ -132,13 +167,15 @@ function CheckoutPage() {
 
     const methods = paymentConfig?.methods;
 
-    // 1. Card is available for both delivery & pickup (fallback or when enabled)
+    // 1. Card — both delivery & pickup, but only when this restaurant has its own
+    //    Stripe publishable key. No key means no way to take a real payment, so the
+    //    method is withheld rather than offered and failed at the last step (§3).
     const cardEnabled = !methods || methods.card === undefined || methods.card.enabled !== false;
-    if (cardEnabled) {
+    if (cardEnabled && stripePublishableKey) {
       list.push({
         id: "card",
         label: "Card payment",
-        sublabel: "Visa •••• 4242 · instant secure payment",
+        sublabel: "Pay securely with Visa, Mastercard or Amex",
         instructions: methods?.card?.instructions ?? null,
         badge: "Instant",
         icon: CreditCard,
@@ -171,8 +208,9 @@ function CheckoutPage() {
       });
     }
 
-    // 4. EFT is available for both delivery & pickup (§3.6)
-    if (methods?.eft?.enabled === true) {
+    // 4. EFT — both delivery & pickup, but only when this restaurant has its own
+    //    Cloudinary account to receive the proof of payment (§5).
+    if (methods?.eft?.enabled === true && cloudinaryTarget) {
       list.push({
         id: "eft",
         label: "Direct EFT / bank transfer",
@@ -183,20 +221,14 @@ function CheckoutPage() {
       });
     }
 
-    // Fallback: If no methods enabled for this mode, ALWAYS fall back to Card payment (§3.6)
-    if (list.length === 0) {
-      list.push({
-        id: "card",
-        label: "Card payment",
-        sublabel: "Visa •••• 4242 · instant secure payment",
-        instructions: null,
-        badge: "Instant",
-        icon: CreditCard,
-      });
-    }
-
+    /*
+     * Deliberately no fallback. This used to force Card on whenever nothing else
+     * was enabled, which was harmless while card payment was simulated. With a
+     * real charge behind it, offering a method the restaurant cannot actually
+     * take would charge the wrong account or fail at the last step.
+     */
     return list;
-  }, [paymentConfig, mode]);
+  }, [paymentConfig, mode, stripePublishableKey, cloudinaryTarget]);
 
   // Keep paymentId synchronized whenever mode or available methods change
   useEffect(() => {
@@ -231,6 +263,11 @@ function CheckoutPage() {
   async function submit() {
     if (placing || (!canCheckout && mode === "delivery")) return;
 
+    if (!targetRestaurantId) {
+      toast.error("We could not tell which restaurant this order is for. Please reopen your cart.");
+      return;
+    }
+
     if (mode === "delivery" && !deliveryLocation) {
       toast.error("Please add at least one delivery address to place your order.");
       setOpenLocationDialog(true);
@@ -243,7 +280,19 @@ function CheckoutPage() {
       return;
     }
 
+    if (availablePaymentMethods.length === 0) {
+      toast.error("This restaurant has no payment methods available right now.");
+      return;
+    }
+
+    if (paymentId === "eft" && !eftProofUrl) {
+      toast.error("Please attach your proof of payment before placing the order.");
+      return;
+    }
+
     setPlacing(true);
+    // Kept outside the try so a failure after the charge can still name the payment.
+    let paymentReference: string | null = null;
     try {
       const combinedNotes =
         [instructions.trim(), kitchenNotes.trim()].filter(Boolean).join(" | ") || undefined;
@@ -264,25 +313,40 @@ function CheckoutPage() {
         }
       }
 
-      const finalProofUrl =
-        paymentId === "eft"
-          ? eftProofUrl || `https://storage.hearth.app/proofs/pop_${Date.now()}.pdf`
-          : null;
+      let paymentGateway: string | null = null;
+      let cardBrand: string | null = null;
+      let cardLast4: string | null = null;
 
-      const isCard = paymentId === "card";
+      if (paymentId === "card") {
+        const confirmCard = cardConfirmRef.current;
+        if (!confirmCard) {
+          toast.error("The card form is still loading — give it a second and try again.");
+          return;
+        }
+
+        // Takes the money. Everything below this line runs against a real charge.
+        const result = await confirmCard();
+        if (!result.ok) {
+          toast.error(result.message);
+          return;
+        }
+
+        paymentGateway = "stripe";
+        paymentReference = result.paymentIntentId;
+        cardBrand = result.cardBrand;
+        cardLast4 = result.cardLast4;
+      }
 
       const orderId = await placeOrder({
         address: deliveryAddress ?? (restaurant?.address || "Pickup at restaurant"),
         mode,
         paymentMethod: paymentId,
         specialInstructions: combinedNotes || undefined,
-        paymentProofUrl: finalProofUrl,
-        paymentGateway: isCard ? "demo-gateway" : null,
-        paymentReference: isCard
-          ? `SIM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-          : null,
-        cardBrand: isCard ? "Visa" : null,
-        cardLast4: isCard ? "4242" : null,
+        paymentProofUrl: paymentId === "eft" ? eftProofUrl : null,
+        paymentGateway,
+        paymentReference,
+        cardBrand,
+        cardLast4,
       });
 
       toast.success("Order placed successfully!", { description: `Order reference: ${orderId}` });
@@ -290,7 +354,17 @@ function CheckoutPage() {
     } catch (error) {
       console.error("Order placement failed:", error);
       const message = (error as { message?: string } | null)?.message;
-      toast.error(message || "Failed to place order. Please try again.");
+
+      if (paymentReference) {
+        // The card was charged and the order write still failed. Say so plainly and
+        // hand over the reference, rather than inviting a second payment.
+        toast.error("Your payment went through but the order did not save.", {
+          description: `Quote reference ${paymentReference} to support — do not pay again.`,
+          duration: 15000,
+        });
+      } else {
+        toast.error(message || "Failed to place order. Please try again.");
+      }
     } finally {
       setPlacing(false);
     }
@@ -667,6 +741,41 @@ function CheckoutPage() {
             )}
           </fieldset>
 
+          {availablePaymentMethods.length === 0 && !paymentConfigLoading ? (
+            <Callout
+              tone="danger"
+              icon={<Lock className="size-4" aria-hidden />}
+              title="No payment methods available"
+              className="mt-3"
+            >
+              {restaurant?.name ?? "This kitchen"} has not finished setting up payments yet. Please
+              try another restaurant, or contact support if you think this is wrong.
+            </Callout>
+          ) : null}
+
+          {/* Card details — collected by Stripe Elements, never by this app (§3) */}
+          {paymentId === "card" && stripePromise && targetRestaurantId ? (
+            <Panel className="mt-3 p-4">
+              <div className="flex items-center gap-2">
+                <Lock className="size-4 shrink-0 text-primary" aria-hidden />
+                <h3 className="text-xs font-bold">Card details</h3>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Handled directly by Stripe — your card number never reaches Hearth.
+              </p>
+
+              <div className="mt-3">
+                <Elements stripe={stripePromise} options={elementsOptions}>
+                  <StripeCardFields
+                    confirmRef={cardConfirmRef}
+                    restaurantId={targetRestaurantId}
+                    amount={totals.total}
+                  />
+                </Elements>
+              </div>
+            </Panel>
+          ) : null}
+
           {/* EFT Bank Transfer Details & Proof Upload (§3.6 & §3.8) */}
           {paymentId === "eft" ? (
             <Panel className="mt-3 p-4">
@@ -690,22 +799,50 @@ function CheckoutPage() {
                 </label>
                 <div className="mt-2 flex items-center gap-2">
                   <label className="flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-secondary/50 px-3.5 text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-foreground">
-                    <Upload className="size-3.5 shrink-0 text-primary" aria-hidden />
+                    {uploadingProof ? (
+                      <Loader2
+                        className="size-3.5 shrink-0 animate-spin text-primary"
+                        aria-hidden
+                      />
+                    ) : (
+                      <Upload className="size-3.5 shrink-0 text-primary" aria-hidden />
+                    )}
                     <span className="truncate">
-                      {eftProofName || "Choose receipt or screenshot"}
+                      {uploadingProof
+                        ? "Uploading…"
+                        : eftProofName || "Choose receipt or screenshot"}
                     </span>
                     <input
                       type="file"
                       accept="image/*,application/pdf"
                       className="sr-only"
-                      onChange={(e) => {
+                      disabled={uploadingProof}
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          setEftProofName(file.name);
-                          setEftProofUrl(
-                            `https://storage.hearth.app/proofs/${Date.now()}_${file.name}`,
-                          );
-                          toast.success(`Attached proof of payment: ${file.name}`);
+                        // Clear the input so re-picking the same file fires onChange again.
+                        e.target.value = "";
+                        if (!file) return;
+
+                        if (!cloudinaryTarget) {
+                          toast.error("This restaurant cannot accept EFT proof right now.");
+                          return;
+                        }
+
+                        setUploadingProof(true);
+                        setEftProofName(file.name);
+                        try {
+                          // Uploads the real file and keeps only the URL Cloudinary
+                          // returns — nothing is fabricated here any more.
+                          const secureUrl = await uploadProofOfPayment(file, cloudinaryTarget);
+                          setEftProofUrl(secureUrl);
+                          toast.success(`Attached ${file.name}`);
+                        } catch (error) {
+                          setEftProofName("");
+                          setEftProofUrl("");
+                          const message = (error as { message?: string } | null)?.message;
+                          toast.error(message || "Could not upload that file. Please try again.");
+                        } finally {
+                          setUploadingProof(false);
                         }
                       }}
                     />
@@ -725,10 +862,10 @@ function CheckoutPage() {
                   ) : null}
                 </div>
 
-                {eftProofName ? (
+                {eftProofUrl ? (
                   <p className="mt-2 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="size-3 shrink-0" aria-hidden />
-                    <span className="truncate">Attached: {eftProofName}</span>
+                    <span className="truncate">Uploaded: {eftProofName}</span>
                   </p>
                 ) : (
                   <p className="mt-2 text-[11px] text-muted-foreground">
@@ -890,7 +1027,9 @@ function CheckoutPage() {
           <button
             type="button"
             onClick={submit}
-            disabled={placing}
+            // Nothing to pay with, or a proof still uploading — no point letting
+            // the tap through just to fail it.
+            disabled={placing || uploadingProof || availablePaymentMethods.length === 0}
             className="flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-black tracking-[0.1em] text-primary-foreground uppercase shadow-lg shadow-primary/30 transition-all hover:bg-primary/95 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {placing ? (

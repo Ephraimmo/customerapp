@@ -1,5 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { loadStripe, type Stripe, type StripeElementsOptions } from "@stripe/stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
 import {
   ArrowLeft,
   Banknote,
@@ -52,7 +54,12 @@ import {
   type TimelineEvent,
 } from "@/lib/data";
 import { rtdbSet, rtdbSubscribe } from "@/lib/firebase";
-import { usePointsConfig, useRestaurantPointsOverrides } from "@/lib/firebase-adapters";
+import {
+  usePointsConfig,
+  useRestaurantPaymentConfig,
+  useRestaurantPointsOverrides,
+} from "@/lib/firebase-adapters";
+import { StripeCardFields, type CardConfirm } from "@/components/app/stripe-card-fields";
 import { calculateOrderEarnedPoints, findRestaurantPointsOverride } from "@/lib/promotions";
 import { cn } from "@/lib/utils";
 
@@ -102,6 +109,7 @@ function TrackOrder() {
   const [paymentEvidence, setPaymentEvidence] = useState<OrderPaymentEvidence | null>(null);
   const [openReceiptModal, setOpenReceiptModal] = useState(false);
   const [retryingCard, setRetryingCard] = useState(false);
+  const retryConfirmRef = useRef<CardConfirm | null>(null);
   const [stepsOpen, setStepsOpen] = useState(true);
   const [logOpen, setLogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -184,9 +192,47 @@ function TrackOrder() {
     order?.receipt_number ||
     (order?.order_number ? `R-${order.order_number}` : `R-${orderId}`);
 
+  /*
+   * Retrying a failed card payment goes through the same restaurant's own Stripe
+   * account as checkout does. No key configured means no retry offered, rather
+   * than a button that cannot actually take money.
+   */
+  const { paymentConfig: retryPaymentConfig } = useRestaurantPaymentConfig(
+    isFailedPayment ? (order?.restaurant_id ?? null) : null,
+  );
+  const retryPublishableKey =
+    retryPaymentConfig?.methods?.card?.stripePublishableKey?.trim() || null;
+  const retryStripePromise = useMemo<Promise<Stripe | null> | null>(
+    () => (retryPublishableKey ? loadStripe(retryPublishableKey) : null),
+    [retryPublishableKey],
+  );
+  const retryElementsOptions = useMemo<StripeElementsOptions>(
+    () => ({
+      mode: "payment",
+      amount: Math.max(1, Math.round((order?.total || 0) * 100)),
+      currency: "zar",
+      paymentMethodTypes: ["card"],
+    }),
+    [order?.total],
+  );
+
   async function handleRetryCardPayment() {
+    const confirmCard = retryConfirmRef.current;
+    if (!confirmCard || !order?.restaurant_id) {
+      toast.error("The card form is still loading — give it a second and try again.");
+      return;
+    }
+
     setRetryingCard(true);
     try {
+      // Actually charges the card. This used to write a paid receipt without any
+      // money moving, which let a failed order be marked paid from the browser.
+      const result = await confirmCard();
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+
       const now = new Date().toISOString();
       const updatedEvidence: OrderPaymentEvidence = {
         order_id: orderId,
@@ -198,16 +244,16 @@ function TrackOrder() {
         recorded_by: "customer_app",
         updated_at: now,
         paid_at: now,
-        gateway: "demo-gateway",
-        reference: `SIM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        card_brand: "Visa",
-        card_last4: "4242",
+        gateway: "stripe",
+        reference: result.paymentIntentId,
+        card_brand: result.cardBrand,
+        card_last4: result.cardLast4,
       };
       await rtdbSet(`orders/${orderId}/payment`, updatedEvidence);
       await rtdbSet(`orders/${orderId}/payment_status`, "paid");
-      toast.success("Card payment successful! Receipt updated.");
-    } catch (err) {
-      toast.error("Retry failed. Please check your card details.");
+      toast.success("Payment received. Your receipt is updated.");
+    } catch {
+      toast.error("That payment could not be completed. Please try again.");
     } finally {
       setRetryingCard(false);
     }
@@ -773,9 +819,9 @@ function TrackOrder() {
                         ? "Paid in cash to your courier."
                         : paymentMethod === "eft"
                           ? "Bank transfer verified by the restaurant."
-                          : `Paid with ${paymentEvidence?.card_brand || "Visa"} •••• ${
-                              paymentEvidence?.card_last4 || "4242"
-                            }.`}
+                          : paymentEvidence?.card_last4
+                            ? `Paid with ${paymentEvidence.card_brand ?? "card"} •••• ${paymentEvidence.card_last4}.`
+                            : "Card payment received."}
                   </p>
                   {formatDateTime(paymentEvidence?.paid_at) ? (
                     <p className="mt-1 text-[11px] text-muted-foreground">
@@ -788,14 +834,33 @@ function TrackOrder() {
                   <p className="text-xs leading-relaxed text-destructive">
                     That card transaction did not go through. Retry to keep your order moving.
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleRetryCardPayment}
-                    disabled={retryingCard}
-                    className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-xl bg-primary px-4 text-xs font-black tracking-wider text-primary-foreground uppercase shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
-                  >
-                    {retryingCard ? "Retrying…" : "Retry payment"}
-                  </button>
+
+                  {retryStripePromise && order.restaurant_id ? (
+                    <>
+                      <div className="mt-3">
+                        <Elements stripe={retryStripePromise} options={retryElementsOptions}>
+                          <StripeCardFields
+                            confirmRef={retryConfirmRef}
+                            restaurantId={order.restaurant_id}
+                            amount={order.total}
+                          />
+                        </Elements>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRetryCardPayment}
+                        disabled={retryingCard}
+                        className="mt-3 inline-flex h-10 cursor-pointer items-center justify-center rounded-xl bg-primary px-4 text-xs font-black tracking-wider text-primary-foreground uppercase shadow-sm transition-colors hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        {retryingCard ? "Paying…" : `Pay ${money(order.total)}`}
+                      </button>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Card payments are not available for this restaurant right now — please contact
+                      support to settle this order.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <>

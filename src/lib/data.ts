@@ -42,6 +42,19 @@ export type PaymentMethod =
 export interface RestaurantPaymentMethodConfig {
   enabled: boolean;
   instructions?: string | null;
+
+  /*
+   * Card only. camelCase deliberately — these are the field names the Super
+   * Admin console already writes into `payment_config.methods.card`.
+   */
+
+  /** Safe to read in the browser; Stripe publishable keys are designed to be public. */
+  stripePublishableKey?: string;
+  /**
+   * Server-only. Never read this into component state, a loader, or anything
+   * that reaches the client bundle — see `src/lib/stripe-payment.server.ts`.
+   */
+  stripeSecretKey?: string;
 }
 
 export interface RestaurantPaymentConfig {
@@ -313,6 +326,12 @@ export type Restaurant = {
   status?: "approved" | "pending" | "suspended" | "rejected";
   branches?: FirebaseRestaurantBranch[];
   branch_count?: number;
+
+  // This restaurant's own Cloudinary account, used for EFT proof-of-payment
+  // uploads. Flat on the restaurant document, not under payment_config — a
+  // different read path from the Stripe keys above.
+  cloudinaryCloudName?: string;
+  cloudinaryUploadPreset?: string;
 };
 
 /* ----------------------------- Default Menu Catalog ------------------------------ */
@@ -824,8 +843,11 @@ export async function placeFirebaseOrder(input: {
     input.payment_method === "wallet" ||
     input.payment_method === "google_pay";
 
+  // A card order counts as paid only once a gateway has confirmed it and handed
+  // back a reference — never just because the method was "card".
   const paymentStatus: PaymentEvidenceStatus =
-    input.payment_status ?? (isCard ? "paid" : "pending");
+    input.payment_status ??
+    (isCard && input.payment_gateway && input.payment_reference ? "paid" : "pending");
 
   const receiptNumber = `R-${orderNumber}`;
 
@@ -839,12 +861,13 @@ export async function placeFirebaseOrder(input: {
     recorded_by: "customer_app",
     updated_at: ts,
     paid_at: paymentStatus === "paid" ? ts : null,
-    gateway: isCard ? input.payment_gateway || "demo-gateway" : null,
-    reference: isCard
-      ? input.payment_reference || `SIM-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
-      : null,
-    card_brand: isCard ? input.card_brand || "Visa" : null,
-    card_last4: isCard ? input.card_last4 || "4242" : null,
+    // Recorded exactly as the gateway reported it. These used to fall back to
+    // "demo-gateway" / "SIM-…" / Visa 4242, which put fictional evidence on a
+    // real receipt.
+    gateway: isCard ? input.payment_gateway || null : null,
+    reference: isCard ? input.payment_reference || null : null,
+    card_brand: isCard ? input.card_brand || null : null,
+    card_last4: isCard ? input.card_last4 || null : null,
     proof_url: input.payment_proof_url || null,
     notes: input.payment_notes || null,
   };

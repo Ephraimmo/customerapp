@@ -379,7 +379,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return () => stops.forEach((stop) => stop());
   }, [hydrated, user?.uid, user?.email, placedOrderIds.join(",")]);
 
-
   // Credit loyalty points when delivery orders transition to "delivered" (§6 & §9 of Integration Guide)
   useEffect(() => {
     if (!hydrated) return;
@@ -461,7 +460,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // Persist placed order IDs to localStorage, scoped to the current identity
   useEffect(() => {
     if (!hydrated) return;
-    window.localStorage.setItem(placedOrdersStorageKey(identityKey), JSON.stringify(placedOrderIds));
+    window.localStorage.setItem(
+      placedOrdersStorageKey(identityKey),
+      JSON.stringify(placedOrderIds),
+    );
   }, [placedOrderIds, hydrated, identityKey]);
 
   // Mirror cart to user's Firebase cart document when signed in
@@ -1022,13 +1024,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
           delivery_address: orderMode === "pickup" ? null : deliveryAddress,
           special_instructions: specialInstructions || null,
           payment_method: paymentMethod,
-          payment_status: isCard ? "paid" : "pending",
+          // Paid only when a real gateway actually confirmed it. Card orders used to
+          // be marked paid on sight, which is exactly what must not happen now that
+          // a real charge stands behind them.
+          payment_status: isCard && paymentGateway && paymentReference ? "paid" : "pending",
           payment_proof_url: paymentProofUrl || null,
           payment_notes: paymentNotes || null,
-          payment_gateway: paymentGateway || (isCard ? "demo-gateway" : null),
+          // No invented values: whatever the gateway returned, or nothing.
+          payment_gateway: paymentGateway || null,
           payment_reference: paymentReference || null,
-          card_brand: cardBrand || (isCard ? "Visa" : null),
-          card_last4: cardLast4 || (isCard ? "4242" : null),
+          card_brand: cardBrand || null,
+          card_last4: cardLast4 || null,
           coupon_code: couponCode,
           discount: totals.discount,
           tip: orderMode === "pickup" ? 0 : totals.tip,
