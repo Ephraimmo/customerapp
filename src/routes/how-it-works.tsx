@@ -20,12 +20,12 @@ export const Route = createFileRoute("/how-it-works")({
       {
         name: "description",
         content:
-          "A short narrated walkthrough: create your account, set your delivery address, order from a kitchen and check out on Kasi Zonke Link.",
+          "A narrated walkthrough of ordering on Kasi Zonke Link: create your account, set your delivery address, order from a kitchen, pay and track your delivery.",
       },
       { property: "og:title", content: "How to order — Kasi Zonke Link" },
       {
         property: "og:description",
-        content: "Watch the full ordering journey, step by step, in under two minutes.",
+        content: "Watch the full ordering journey, step by step, in under two and a half minutes.",
       },
     ],
   }),
@@ -49,9 +49,9 @@ const CHAPTERS: Chapter[] = [
   {
     n: 1,
     title: "Create your account",
-    hint: "Register once, then everything follows you",
+    hint: "Sign in → Register → Create Account",
     start: 0,
-    end: 26.1,
+    end: 26.14,
     detail:
       "Tap Sign in, switch to the Register tab, then enter your name, email, phone number and a password. Once you're registered your cart, your saved addresses and your loyalty points are kept on your account, so you can start an order on one phone and finish it on another.",
   },
@@ -59,8 +59,8 @@ const CHAPTERS: Chapter[] = [
     n: 2,
     title: "Set your delivery address",
     hint: "Street, city, GPS pin, then save",
-    start: 26.1,
-    end: 48.6,
+    start: 26.14,
+    end: 48.38,
     detail:
       "Open the address selector from the top of the home screen. Fill in your street and city, then tap Current location so we can pin you exactly. Give the address a label like Home or Work and save it — your delivery fee and arrival time are both worked out from this pin.",
   },
@@ -68,19 +68,37 @@ const CHAPTERS: Chapter[] = [
     n: 3,
     title: "Pick a kitchen and add food",
     hint: "Browse, open a dish, choose your options",
-    start: 48.6,
-    end: 76.3,
+    start: 48.38,
+    end: 76.01,
     detail:
-      "Every restaurant card shows the distance, the delivery fee and how long the food will take. Open a kitchen, tap a dish, then choose your size, tick any extras and leave a note for the chef. The price updates as you choose, so you always know the total before you add it.",
+      "Every restaurant card shows the distance, the delivery fee and how long the food will take. Open a kitchen, tap a dish, then choose any sizes or extras it offers and leave a note for the chef. The price updates as you choose, so you always know the total before you add it.",
   },
   {
     n: 4,
     title: "Check your cart",
     hint: "Quantities, promo codes, and your total",
-    start: 76.3,
-    end: 94.9,
+    start: 76.01,
+    end: 93.75,
     detail:
       "Tap View Cart to review everything before you pay. Change the quantity, remove an item, or enter a promo code. Your subtotal, delivery fee and total are all shown before any money changes hands.",
+  },
+  {
+    n: 5,
+    title: "Place your order",
+    hint: "Confirm address, pay cash on delivery, send it",
+    start: 93.75,
+    end: 115.79,
+    detail:
+      "Continue to checkout, confirm the delivery address, then pick how you want to pay — in this walkthrough we pay cash on delivery, so you hand the money to the driver when the food arrives. Check the summary, then place the order and the kitchen gets it straight away.",
+  },
+  {
+    n: 6,
+    title: "Track it to your door",
+    hint: "Live status, driver, and support",
+    start: 115.79,
+    end: 138.16,
+    detail:
+      "Your order screen updates itself as the kitchen accepts it, prepares it and hands it to a driver. You'll see the estimated arrival time, the live map once a driver is assigned, and your full receipt. If anything goes wrong, support is one tap away from this screen.",
   },
 ];
 
