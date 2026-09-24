@@ -1,0 +1,13 @@
+{
+  "name": "Hearth — Food delivery from local kitchens",
+  "short_name": "Hearth",
+  "description": "Order from nearby kitchens, track your delivery live and earn rewards.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fcfaf7",
+  "theme_color": "#fb4500",
+  "icons": [
+    { "src": "/favicon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any" },
+    { "src": "/logo-mark.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "maskable" }
+  ]
+}

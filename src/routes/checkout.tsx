@@ -790,7 +790,7 @@ function CheckoutPage() {
                 <CopyRow label="Account no." value="6289 1234 5678" />
                 <CopyRow label="Branch code" value="250655" />
                 <CopyRow label="Amount" value={money(totals.total)} />
-                <CopyRow label="Reference" value={`FF-ORDER / ${user?.name || "Customer"}`} />
+                <CopyRow label="Reference" value={`HEARTH / ${user?.name || "Customer"}`} />
               </div>
 
               <div className="mt-4">

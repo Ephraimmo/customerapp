@@ -20,6 +20,7 @@ import {
   Utensils,
   X,
 } from "lucide-react";
+import { HearthMark } from "@/components/app/logo";
 import { toast } from "sonner";
 import { RestaurantCard } from "@/components/app/restaurant-card";
 import { money } from "@/lib/data";
@@ -199,11 +200,15 @@ function Discover() {
     <div className="mx-auto min-h-dvh w-full max-w-full bg-background px-0 sm:max-w-[640px] md:max-w-3xl lg:max-w-6xl">
       {/* Top Header & Search Area */}
       <header className="sticky top-0 z-40 md:static border-b border-border bg-background/95 px-4 pt-4 pb-3 backdrop-blur-md">
-        <div className="mb-3 flex items-center justify-between md:hidden">
+        <div className="mb-3 flex items-center justify-between gap-3 md:hidden">
+          {/* Brand mark: mobile had no Hearth branding anywhere above the fold. */}
+          <HearthMark className="size-7 shrink-0 text-primary" />
+          <span className="sr-only">Hearth</span>
+
           <button
             type="button"
             onClick={() => setOpenLocationModal(true)}
-            className="flex flex-col text-left cursor-pointer group"
+            className="mr-auto flex cursor-pointer flex-col text-left group"
           >
             <span className="label-mono text-muted-foreground flex items-center gap-1 text-[11px]">
               Deliver to{" "}

@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, Gift, LogIn, UserPlus } from "lucide-react";
+import { HearthLogo } from "@/components/app/logo";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 
@@ -89,14 +90,17 @@ function LoginPage() {
         >
           <ArrowLeft className="size-4" aria-hidden />
         </Link>
-        <div>
-          <h1 className="text-lg leading-none font-black tracking-tight">
+        <div className="min-w-0">
+          <h1 className="truncate text-lg leading-none font-black tracking-tight">
             {tab === "signin" ? "Sign in" : "Create Account"}
           </h1>
-          <p className="label-mono mt-1 text-muted-foreground">
+          <p className="label-mono mt-1 truncate text-muted-foreground">
             Keep your cart & loyalty points saved
           </p>
         </div>
+
+        {/* Signing in is the moment the brand should be visible. */}
+        <HearthLogo className="ml-auto" showWordmark={false} />
       </header>
 
       <main className="space-y-6 px-4 pt-6 pb-24">
